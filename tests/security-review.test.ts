@@ -1,5 +1,6 @@
 import net from "node:net";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { expectLacks } from "./leak.js";
 import { startStack, ScriptedProvider, SITE, type Stack } from "./helpers.js";
 
 let s: Stack;
@@ -44,7 +45,7 @@ describe("review finding 2b: page changes location after goto()", () => {
     const r = await s.run(TASK, p);
     expect(r.status).toBe("blocked");
     expect(events(r.task_id).some((e) => e.category === "inspect" && e.outcome === "ok")).toBe(false);
-    expect(JSON.stringify(p.seen)).not.toContain("1284.55");
+    expectLacks("model-visible text", JSON.stringify(p.seen), "1284.55");
   });
   it("client-side location.assign to the auth route => paused before extraction", async () => {
     const p = new ScriptedProvider([{ name: "navigate", input: { url: `${SITE}/fixtures/client-redirect` } }, { name: "inspect", input: { region: "results" } }]);

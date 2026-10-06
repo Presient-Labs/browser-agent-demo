@@ -37,7 +37,8 @@ export function createBackend(o: BackendOpts) {
   audit.onEvent((ev) => broadcast({ type: "audit", event: ev }));
 
   const hostOk = (h: string | undefined) => !!h && (h === `127.0.0.1:${cfg.backendPort}` || h === `localhost:${cfg.backendPort}` || /^127\.0\.0\.1:\d+$/.test(h));
-  const originOk = (origin: string | undefined) => origin === undefined || o.allowedOrigins.includes(origin);
+  // A missing Origin is NOT acceptable: only the approved extension origin may drive the API (the session secret alone is not enough).
+  const originOk = (origin: string | undefined) => origin !== undefined && o.allowedOrigins.includes(origin);
   const status = () => ({
     mode: o.provider.mode, provider: o.provider.id, model: o.provider.model,
     running: runner.active, browser_connected: o.bridge.connected, synthetic_only: true,

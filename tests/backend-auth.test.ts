@@ -6,7 +6,7 @@ import { startStack, type Stack } from "./helpers.js";
 import { createBackend } from "../backend/src/server.js";
 import { FakeProvider } from "../backend/src/providers/fake.js";
 import { extensionIdFromManifest } from "../backend/src/extension-id.js";
-import { ALL_MARKERS } from "../site/src/data.js";
+import { expectNoMarkers } from "./leak.js";
 
 const SECRET = "test-secret-0123456789";
 const EXT = `chrome-extension://${extensionIdFromManifest(JSON.parse(readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8")))}`;
@@ -57,6 +57,12 @@ describe("12 backend authentication / origin", () => {
     const r = await req("GET", "/api/status", { headers: good, host: "evil.example:4200" });
     expect(r.status).toBe(403);
   });
+  it("review #10: a request with a valid secret but NO Origin header is rejected (HTTP), no task started", async () => {
+    const r = await req("POST", "/api/tasks", { headers: { "x-demo-session": SECRET, "content-type": "application/json" }, body: TASK });
+    expect(r.status).toBe(403); expect(be.runner.active).toBe(false);
+    expect((await req("GET", "/api/status", { headers: { "x-demo-session": SECRET } })).status).toBe(403);
+    expect((await req("POST", "/api/tasks/stop", { headers: { "x-demo-session": SECRET, "content-type": "application/json" }, body: "{}" })).status).toBe(403);
+  });
   it("mutating endpoint requires JSON content type", async () => {
     const r = await req("POST", "/api/tasks", { headers: { ...good, "content-type": "text/plain" }, body: TASK });
     expect(r.status).toBe(415);
@@ -69,7 +75,7 @@ describe("12 backend authentication / origin", () => {
     const r = await req("GET", "/api/status", { headers: good });
     const j = JSON.parse(r.body);
     expect(r.status).toBe(200); expect(j.mode).toBe("FAKE"); expect(j.unsupported.length).toBeGreaterThan(3);
-    expect(r.body).not.toContain("sk-");
+    expect(r.body.includes("sk-")).toBe(false);
   });
   it("auth failures were recorded as metadata-only audit events", () => {
     const ev = s.audit.list("api");
@@ -106,7 +112,7 @@ describe("12 backend authentication / origin", () => {
     expect(result?.status).toBe("success");
     expect(result.fields.balance).toBe("1284.55");
     const nonResult = JSON.stringify(frames.filter((f) => f.type !== "result"));
-    for (const m of ALL_MARKERS) expect(nonResult).not.toContain(m);
+    expectNoMarkers("ws frames", nonResult);
     ws.close();
   });
 });

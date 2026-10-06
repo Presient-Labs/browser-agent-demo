@@ -6,7 +6,7 @@ import { startStack, type Stack } from "./helpers.js";
 import { createBackend } from "../backend/src/server.js";
 import { FakeProvider } from "../backend/src/providers/fake.js";
 import { extensionIdFromManifest } from "../backend/src/extension-id.js";
-import { ALL_MARKERS } from "../site/src/data.js";
+import { expectHas, expectLacks, expectNoMarkers } from "./leak.js";
 
 const HAS_DISPLAY = !!process.env.DISPLAY;
 const EXT_DIR = new URL("../extension/dist", import.meta.url).pathname;
@@ -31,10 +31,12 @@ d("extension side panel (headed Chromium under Xvfb, extension LOADED via --load
   });
   afterAll(async () => { try { await br?.close(); } catch {} await be?.close(); await s?.close(); });
 
-  it("extension service worker is registered under the manifest-derived id", async () => {
-    const sw = br.contexts()[0].serviceWorkers().map((w) => w.url());
-    const t = await (await fetch(`${s.browser.cdpUrl}/json/list`)).json() as { url: string }[];
-    expect([...sw, ...t.map((x) => x.url)].some((u) => u.startsWith(`chrome-extension://${extId}/`))).toBe(true);
+  it("review #12: the extension's background SERVICE WORKER target itself exists (not merely the opened panel page)", async () => {
+    const t = (await (await fetch(`${s.browser.cdpUrl}/json/list`)).json()) as { type: string; url: string }[];
+    const workers = t.filter((x) => x.type === "service_worker" && x.url === `chrome-extension://${extId}/background.js`);
+    expect(workers.length).toBeGreaterThanOrEqual(1);
+    // the panel page is also an extension target; it must NOT be what satisfies the check
+    expect(t.some((x) => x.type === "page" && x.url.startsWith(`chrome-extension://${extId}/`))).toBe(true);
   });
   it("wrong secret does not connect", async () => {
     await panel.fill("#secret", "wrong"); await panel.click("#connect-btn");
@@ -51,22 +53,19 @@ d("extension side panel (headed Chromium under Xvfb, extension LOADED via --load
   });
   it("runs the SYN-1042 task from the panel: result card with source URL and UTC time; audit table has metadata only", async () => {
     await panel.click("#run-btn");
-    try { await waitText(panel, "#state", "SUCCESS", 30000); } catch (e) {
-      console.log("DIAG state=", await panel.innerText("#state"), "result=", await panel.innerText("#result-body").catch(() => ""), "progress=", await panel.innerText("#progress"));
-      throw e;
-    }
+    await waitText(panel, "#state", "SUCCESS", 30000);
     const card = await panel.locator("#result-body").innerText();
-    expect(card).toContain("1284.55"); expect(card).toContain("Pending - Payer Review");
-    expect(card).toContain("http://127.0.0.1:4100/records/SYN-1042");
+    expectHas("card balance", card, "1284.55"); expectHas("card status", card, "Pending - Payer Review");
+    expectHas("card source", card, "http://127.0.0.1:4100/records/SYN-1042");
     expect(card).toMatch(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z/);
-    expect(card).toContain("estimate");
+    expectHas("card estimate", card, "estimate");
     await panel.locator("#audit summary").click();
     const audit = await panel.locator("#audit-rows").innerText();
     expect(audit.length).toBeGreaterThan(20);
-    for (const m of ALL_MARKERS) expect(audit).not.toContain(m);
-    expect(audit).not.toContain("1284.55");
+    expectNoMarkers("audit panel", audit);
+    expectLacks("audit panel", audit, "1284.55");
     const progress = await panel.locator("#progress").innerText();
-    expect(progress).not.toContain("1284.55");
+    expectLacks("progress panel", progress, "1284.55");
   });
   it("panel keeps no state in browser storage", async () => {
     const st = await panel.evaluate(() => ({ ls: localStorage.length, ss: sessionStorage.length, ck: document.cookie }));

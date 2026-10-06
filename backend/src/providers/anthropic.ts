@@ -21,18 +21,34 @@ export function toAnthropicMessages(msgs: Msg[]): AnthropicMsg[] {
   return out;
 }
 
+/**
+ * Transport guard: redirects are NEVER followed (a 307/308 would re-POST the task + page content to another host).
+ * Any 3xx is converted into a non-retryable safe error.
+ */
+export function noRedirectFetch(base: typeof fetch): typeof fetch {
+  return (async (input: any, init?: any) => {
+    const r = await base(input, { ...(init ?? {}), redirect: "manual" });
+    if (r.type === "opaqueredirect" || (r.status >= 300 && r.status < 400)) {
+      try { await r.body?.cancel(); } catch { /* ignore */ }
+      throw new ProviderError("PROVIDER_BAD_RESPONSE", false);
+    }
+    return r;
+  }) as typeof fetch;
+}
+
 /** Real Anthropic adapter. Endpoint is a code constant (no user-supplied endpoints). */
 export class AnthropicProvider implements ModelProvider {
   readonly id = "anthropic";
   readonly mode = "REAL" as const;
   private client: Anthropic;
-  constructor(readonly model: string, apiKey: string, opts: { fetch?: typeof fetch } = {}) {
+  constructor(readonly model: string, apiKey: string, opts: { fetch?: typeof fetch; /** TEST ONLY (never wired to config/env): loopback server standing in for the endpoint */ testOnlyBaseURL?: string } = {}) {
     this.client = new Anthropic({
       apiKey,
-      baseURL: PROVIDER_ENDPOINTS.anthropic,
+      baseURL: opts.testOnlyBaseURL ?? PROVIDER_ENDPOINTS.anthropic,
       maxRetries: 0, // retries are owned (and bounded/audited) by the coordinator
       timeout: 60_000,
-      fetch: opts.fetch,
+      logLevel: "off", // explicit: the SDK must never log request/response bodies (ANTHROPIC_LOG is ignored when this is set)
+      fetch: noRedirectFetch(opts.fetch ?? globalThis.fetch),
       // The SDK has no telemetry channel; additionally blank its informational platform headers.
       defaultHeaders: {
         "X-Stainless-Lang": null, "X-Stainless-Package-Version": null, "X-Stainless-OS": null, "X-Stainless-Arch": null,
@@ -57,6 +73,8 @@ export class AnthropicProvider implements ModelProvider {
       return { text, toolCalls, usage: { inputTokens: r.usage?.input_tokens ?? 0, outputTokens: r.usage?.output_tokens ?? 0 } };
     } catch (e: any) {
       if (req.signal?.aborted) throw e;
+      if (e instanceof ProviderError) throw e;
+      if (e?.cause instanceof ProviderError) throw e.cause; // e.g. redirect refused by the transport guard
       const status: number | undefined = e?.status;
       // Map to a safe code. The SDK error object (may echo content) is dropped here.
       if (status === 401 || status === 403) throw new ProviderError("PROVIDER_AUTH", false);

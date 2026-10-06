@@ -70,6 +70,7 @@ export class TaskRunner {
     private emit: (e: ProgressEvent) => void = () => {},
   ) {}
 
+  /** Stop: abort the task-wide signal; the listener below closes the task context so in-flight browser work dies at once. */
   stop() { this.aborted = true; this.abortCtl.abort(); }
 
   async run(taskText: string, taskId = randomUUID()): Promise<TaskResult> {
@@ -83,6 +84,25 @@ export class TaskRunner {
     let search: { recordId: string; count: number; url: string; at: string } | undefined;
     let links = new Map<string, string>();
     const progress = (text: string) => this.emit({ task_id: taskId, text });
+    // Task-wide deadline + cancellation: one signal, aborted by Stop or by the wall-time timer.
+    const deadline = t0 + b.wallTimeMs;
+    let deadlineHit = false;
+    const ctl = this.abortCtl; // local: a late timer must never abort a NEWER task's controller
+    const signal = ctl.signal;
+    const timer = setTimeout(() => { deadlineHit = true; ctl.abort(); }, b.wallTimeMs);
+    signal.addEventListener("abort", () => { void this.bridge.closeTaskTab(); }, { once: true });
+    /** Checked after EVERY await: returns the terminal result if the task was stopped or ran out of time. */
+    const gate = (): TaskResult | null => {
+      if (this.aborted) return result("stopped", "STOPPED");
+      if (deadlineHit || Date.now() > deadline) return result("error", "WALL_TIME_BUDGET");
+      return null;
+    };
+    const abortable = <T,>(p: Promise<T>): Promise<T> => new Promise<T>((res, rej) => {
+      if (signal.aborted) return rej(new Error("ABORTED"));
+      const on = () => rej(new Error("ABORTED"));
+      signal.addEventListener("abort", on, { once: true });
+      p.then((v) => { signal.removeEventListener("abort", on); res(v); }, (e) => { signal.removeEventListener("abort", on); rej(e); });
+    });
 
     const result = (status: TaskStatus, code: string, extra: Partial<TaskResult> = {}): TaskResult => {
       const [message, next_action] = MESSAGES[code] ?? MESSAGES.INTERNAL_ERROR;
@@ -95,6 +115,7 @@ export class TaskRunner {
       };
     };
     const finalize = (r: TaskResult): TaskResult => {
+      clearTimeout(timer);
       const outcome: Outcome = r.status === "success" || r.status === "not_found" || r.status === "uncertain" ? "ok"
         : r.status === "blocked" ? "blocked" : r.status === "human_action_required" ? "paused" : r.status === "stopped" ? "stopped" : "error";
       this.audit.record({ task_id: taskId, category: "task", outcome, code: r.code, started: t0 });
@@ -108,34 +129,35 @@ export class TaskRunner {
 
     try {
       await this.bridge.openTaskTab(taskId);
+      { const g = gate(); if (g) return finalize(g); }
       const msgs: Msg[] = [{ role: "user", text: taskText }];
 
       for (;;) {
-        if (this.aborted) return finalize(result("stopped", "STOPPED"));
-        if (Date.now() - t0 > b.wallTimeMs) return finalize(result("error", "WALL_TIME_BUDGET"));
+        { const g = gate(); if (g) return finalize(g); }
 
         // ---- model call with bounded retries ----
         let resp;
         for (let attempt = 0; ; attempt++) {
-          if (this.aborted) return finalize(result("stopped", "STOPPED"));
+          { const g = gate(); if (g) return finalize(g); }
           if (modelCalls >= b.maxModelCalls) return finalize(result("error", "MODEL_CALL_BUDGET"));
           modelCalls++;
           const ms = Date.now();
           try {
-            resp = await this.provider.complete({ system: SYSTEM_PROMPT, messages: msgs, tools: TOOL_DEFS, signal: this.abortCtl.signal });
+            resp = await abortable(this.provider.complete({ system: SYSTEM_PROMPT, messages: msgs, tools: TOOL_DEFS, signal }));
             this.audit.record({ task_id: taskId, category: "model_call", outcome: "ok", started: ms });
             break;
           } catch (e) {
-            if (this.aborted) return finalize(result("stopped", "STOPPED"));
+            { const g = gate(); if (g) return finalize(g); }
             const code = e instanceof ProviderError ? e.code : "PROVIDER_UNAVAILABLE";
             const retryable = e instanceof ProviderError ? e.retryable : true;
             this.audit.record({ task_id: taskId, category: "model_call", outcome: "error", code, started: ms });
             if (!retryable || attempt >= b.maxRetries) return finalize(result("error", code));
             progress(`Model call failed (${code}); retrying ${attempt + 1}/${b.maxRetries}`);
-            await new Promise((r) => setTimeout(r, b.retryBackoffMs * 2 ** attempt));
+            await abortable(new Promise((r) => setTimeout(r, b.retryBackoffMs * 2 ** attempt))).catch(() => {});
+            { const g = gate(); if (g) return finalize(g); }
           }
         }
-        if (this.aborted) return finalize(result("stopped", "STOPPED")); // discard response: no further actions
+        { const g = gate(); if (g) return finalize(g); } // discard response: no further actions
         inTok += resp.usage.inputTokens; outTok += resp.usage.outputTokens;
 
         const calls: ToolCall[] = resp.toolCalls;
@@ -182,10 +204,13 @@ export class TaskRunner {
             return finalize(result("blocked", "POLICY_BLOCKED", { source_url: null }));
           }
           const nav = await this.bridge.goto(target);
+          { const g = gate(); if (g) return finalize(g); }
           const viol = this.bridge.takeViolation();
           if (viol) { done("blocked", viol.code); progress(`Step ${steps}: ${name} blocked by policy (${viol.code})`); return finalize(result("blocked", "POLICY_BLOCKED")); }
           if (nav === "failed") { done("error", "NAVIGATION_FAILED"); reply({ ok: false, error: "NAVIGATION_FAILED" }); progress(`Step ${steps}: ${name} failed`); continue; }
-          if (await this.bridge.isAuthPage()) {
+          const authNav = await this.bridge.isAuthPage();
+          { const g = gate(); if (g) return finalize(g); }
+          if (authNav) {
             done("paused", "AUTH_REQUIRED"); progress(`Step ${steps}: authentication page detected; paused before extraction`);
             return finalize(result("human_action_required", "AUTH_REQUIRED"));
           }
@@ -196,11 +221,14 @@ export class TaskRunner {
           done("allowed"); progress(`Step ${steps}: navigate allowed`);
           reply({ ok: true, data: { navigated: true } });
         } else if (name === "lookup_record") {
-          const ex = await this.bridge.extractResults();
+          const ex = await this.bridge.extractResults(b.maxInspectChars);
+          { const g = gate(); if (g) return finalize(g); }
           if (ex.kind === "auth") { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
           if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
           const res = ex.data;
+          extracted += ex.bytes;
           if (!res) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
+          if (ex.truncated) { done("error", "INSPECT_TRUNCATED"); reply({ ok: false, error: "INSPECT_TRUNCATED" }); continue; }
           const url = this.bridge.currentUrl(); const at = new Date().toISOString();
           links = new Map(); const out: { link_id: string; record_id: string }[] = [];
           res.items.slice(0, 20).forEach((it, i) => {
@@ -217,18 +245,24 @@ export class TaskRunner {
           done("allowed"); progress(`Step ${steps}: open_record allowed`);
           reply({ ok: true, data: { opened: true } });
         } else if (name === "inspect") {
-          if (await this.bridge.isAuthPage()) { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
+          const authInspect = await this.bridge.isAuthPage();
+          { const g = gate(); if (g) return finalize(g); }
+          if (authInspect) { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
           if (v.input.region === "results") {
-            const ex = await this.bridge.extractResults();
+            const ex = await this.bridge.extractResults(b.maxInspectChars);
+          { const g = gate(); if (g) return finalize(g); }
             if (ex.kind === "auth") { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
             if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
             const res = ex.data;
             if (!res) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
+            extracted += ex.bytes;
+            if (ex.truncated) { done("error", "INSPECT_TRUNCATED"); reply({ ok: false, error: "INSPECT_TRUNCATED" }); continue; }
             const out = res.items.map((it) => ({ record_id: it.record_id }));
             const body = JSON.stringify({ ok: true, data: { untrusted_page_data: true, results: out } });
-            extracted += body.length; done("ok"); msgs.push({ role: "tool", toolCallId: call.id, content: body.slice(0, b.maxInspectChars) });
+            done("ok"); msgs.push({ role: "tool", toolCallId: call.id, content: body });
           } else {
-            const ex = await this.bridge.extractRecord();
+            const ex = await this.bridge.extractRecord(b.maxInspectChars);
+            { const g = gate(); if (g) return finalize(g); }
             if (ex.kind === "auth") { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
             if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
             const rec = ex.data;
@@ -242,9 +276,9 @@ export class TaskRunner {
               (ev[f.field] ??= []).push(f.value);
             }
             let body = JSON.stringify({ ok: true, data: { untrusted_page_data: true, record_id: rec.recordId, fields } });
-            const truncated = body.length > b.maxInspectChars;
+            const truncated = ex.truncated || body.length > b.maxInspectChars;
             if (truncated) body = JSON.stringify({ ok: false, error: "INSPECT_TRUNCATED" });
-            extracted += body.length;
+            extracted += Math.max(ex.bytes, body.length); // count the REAL extracted size, not the small replacement message
             if (!truncated && /^SYN-\d{4}$/.test(rec.recordId)) evidence = { recordId: rec.recordId, url, at: new Date().toISOString(), fields: ev };
             done("ok"); progress(`Step ${steps}: inspect ok`);
             msgs.push({ role: "tool", toolCallId: call.id, content: body });
@@ -266,6 +300,7 @@ export class TaskRunner {
       log("task_internal_error", { name: e instanceof Error ? e.name : "unknown" });
       return finalize(result("error", "INTERNAL_ERROR"));
     } finally {
+      clearTimeout(timer);
       await this.bridge.closeTaskTab();
     }
   }

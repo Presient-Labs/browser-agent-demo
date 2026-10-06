@@ -136,6 +136,42 @@ const f=document.createElement("form");f.method="post";f.action="/records/SYN-10
 <section data-agent-region="record" data-record-id="SYN-1042"><dl><dt>balance</dt><dd data-field="balance" data-source="billing">1284.55</dd></dl></section>
 <script>setTimeout(()=>{const i=document.createElement("input");i.type="password";document.body.appendChild(i)}, 700)</script>`));
     }
+    // ---- redirect-chain fixtures (review finding 1) ----
+    if (p === "/fixtures/chain-bad-1") return send(302, "", "text/plain", { location: "/fixtures/chain-bad-2" });
+    if (p === "/fixtures/chain-bad-2") return send(302, "", "text/plain", { location: "/records/SYN-1042/delete" });
+    if (p === "/fixtures/chain-ok-1") return send(302, "", "text/plain", { location: "/fixtures/chain-ok-2" });
+    if (p === "/fixtures/chain-ok-2") return send(302, "", "text/plain", { location: "/search?q=SYN-1042" });
+    if (p === "/fixtures/loop") return send(302, "", "text/plain", { location: "/fixtures/loop" });
+    if (p === "/fixtures/chain-offsite-2") return send(302, "", "text/plain", { location: "http://127.0.0.1:4101/chain-offsite" });
+    if (p === "/fixtures/chain-offsite-1") return send(302, "", "text/plain", { location: "/fixtures/chain-offsite-2" });
+    // ---- hostile page (review finding 2): overrides DOM query APIs to hide the credential form; hidden token field ----
+    if (p === "/fixtures/hostile-auth") {
+      return send(200, layout("Hostile page", `<h1>Claim record</h1>
+<section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dt>balance</dt><dd data-field="balance" data-source="billing">1284.55</dd>
+<dd data-field="notes" data-source="free text" style="display:none">AUTHSECRET-hostile-token-7731</dd></dl></section>
+<form><input type="password" name="pw"></form>
+<script>
+const hide=(s)=>/password|one-time|otp|mfa/i.test(String(s));
+const dq=Document.prototype.querySelector, dqa=Document.prototype.querySelectorAll, eq=Element.prototype.querySelector, eqa=Element.prototype.querySelectorAll;
+Document.prototype.querySelector=function(s){return hide(s)?null:dq.call(this,s)};
+Document.prototype.querySelectorAll=function(s){return hide(s)?[]:dqa.call(this,s)};
+Element.prototype.querySelector=function(s){return hide(s)?null:eq.call(this,s)};
+Element.prototype.querySelectorAll=function(s){return hide(s)?[]:eqa.call(this,s)};
+</script>`));
+    }
+    if (p === "/fixtures/hidden-field") {
+      return send(200, layout("Hidden field", `<h1>Claim record</h1>
+<section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dd data-field="balance" data-source="billing">1284.55</dd>
+<dd data-field="notes" data-source="free text" style="display:none">AUTHSECRET-hidden-field-5512</dd>
+<dd data-field="api_token" data-source="billing">AUTHSECRET-unlisted-field-9902</dd></dl></section>`));
+    }
+    if (p === "/fixtures/huge") {
+      const big = "x".repeat(1000);
+      const rows = Array.from({ length: 6000 }, (_, i) => `<dd data-field="payer" data-source="${big}">v${i}${big}</dd>`).join("");
+      return send(200, layout("Huge", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>${rows}</dl></section>`));
+    }
     if (p === "/fixtures/offsite-subresource") {
       return send(200, layout("Subresource fixture", `<h1>Subresource fixture</h1><section data-agent-region="results" data-count="0"></section>
 <img src="http://127.0.0.1:4101/pixel.png" alt="">`));

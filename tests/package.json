@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run --config vitest.config.ts && tsx ../scripts/leak-scan.ts",
+    "test": "tsx ../scripts/run-tests.ts",
     "test:real": "vitest run --config vitest.real.config.ts"
   }
 }

@@ -2,7 +2,7 @@ import net from "node:net";
 import dgram from "node:dgram";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startStack, ScriptedProvider, SITE, type Stack } from "./helpers.js";
-import { ALL_MARKERS } from "../site/src/data.js";
+import { expectLacks, expectNoMarkers } from "./leak.js";
 
 let s: Stack;
 beforeAll(async () => { s = await startStack(); });
@@ -15,8 +15,8 @@ const happy = () => new ScriptedProvider([
 ]);
 const noValue = (r: any, p: ScriptedProvider) => {
   const blob = JSON.stringify(r) + JSON.stringify(p.seen.slice(0, 99));
-  expect(blob).not.toContain("1284.55");
-  for (const m of ALL_MARKERS) expect(blob).not.toContain(m);
+  expectLacks("result+model-visible text", blob, "1284.55");
+  expectNoMarkers("result+model-visible text", blob);
 };
 
 describe("review: TOCTOU between guard and extraction (deterministic seam)", () => {

@@ -7,7 +7,7 @@ export type PolicyCode =
   | "WRITE_METHOD"
   | "WRITE_ROUTE"
   | "ROUTE_NOT_ALLOWED"
-  | "POPUP_NOT_ALLOWED" | "WEBSOCKET_NOT_ALLOWED" | "EXTRACTION_URL_CHANGED";
+  | "POPUP_NOT_ALLOWED" | "WEBSOCKET_NOT_ALLOWED" | "EXTRACTION_URL_CHANGED" | "REDIRECT_LIMIT";
 
 export interface Decision { allow: boolean; code: PolicyCode; category: "navigate" | "subresource" | "write" | "offsite" | "popup" }
 
@@ -19,7 +19,7 @@ const READ_ROUTES: RegExp[] = [
   /^\/login-challenge$/,
   /^\/redirect-offsite$/, // fixtures used to prove redirect checks
   /^\/redirect-onsite$/,
-  /^\/fixtures\/(popup|auto-write|offsite-subresource|websocket|iframe-login|pushstate|client-redirect|egress|flip-auth)$/,
+  /^\/fixtures\/(popup|auto-write|offsite-subresource|websocket|iframe-login|pushstate|client-redirect|egress|flip-auth|chain-bad-[12]|chain-ok-[12]|loop|chain-offsite-[12]|hostile-auth|hidden-field|huge)$/,
 ];
 const WRITE_ROUTE = /\/(update|submit|delete|save|send)(\/|$)|^\/api\/|^\/login-challenge\/submit$/;
 

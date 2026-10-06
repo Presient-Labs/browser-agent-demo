@@ -66,8 +66,8 @@ async function beat(name: string, task: string) {
   await panel.fill("#task-input", task); await sleep(800); await panel.click("#run-btn");
   await panel.waitForFunction(() => { const t = (document.getElementById("state") as HTMLElement).innerText.toLowerCase(); return t !== "running …" && t !== "idle" && !t.startsWith("running"); }, undefined, { timeout: 180000 });
   await sleep(PAUSE);
-  const res = (await panel.innerText("#result-body")).replace(/\s+/g, " ").slice(0, 400);
-  console.log(`[beat] state=${(await state()).trim()}  result: ${res}`);
+
+  console.log(`[beat] state=${(await state()).trim()}`); // status only: never print result content
   const m = (await (await fetch(`${cfg.siteOrigin}/__test/mutations`)).json()) as { mutations: number };
   console.log(`[beat] site mutation counter = ${m.mutations}`);
 }

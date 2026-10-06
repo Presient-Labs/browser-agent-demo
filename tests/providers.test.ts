@@ -10,6 +10,7 @@ import { FakeProvider } from "../backend/src/providers/fake.js";
 import { TaskRunner } from "../backend/src/coordinator.js";
 import { TOOL_DEFS } from "../backend/src/tools.js";
 import { leakMarkerFor } from "../site/src/data.js";
+import { expectLacks } from "./leak.js";
 
 const TASK = "Find SYN-1042 and report its balance.";
 
@@ -62,8 +63,8 @@ describe("11 provider outage (browser + coordinator)", () => {
     expect(r.code).toBe("PROVIDER_UNAVAILABLE");
     expect(p.calls).toBe(s.cfg.budgets.maxRetries + 1);
     const blob = JSON.stringify(s.audit.list(r.task_id)) + s.logs.join("\n");
-    expect(blob).not.toContain("SYN-1042");
-    expect(blob).not.toContain("Find ");
+    expectLacks("audit+logs", blob, "SYN-1042");
+    expectLacks("audit+logs", blob, "Find ");
   });
   it("transient outage recovers within the retry bound", async () => {
     const p = new FakeProvider("outage_then_ok", { failures: 2 });
@@ -87,7 +88,7 @@ describe("11 provider outage (browser + coordinator)", () => {
     expect(r.code).toBe("PROVIDER_UNAVAILABLE");
     expect(seen.length).toBe(s.cfg.budgets.maxRetries + 1);
     const blob = JSON.stringify(r) + JSON.stringify(s.audit.list(r.task_id)) + s.logs.join("\n");
-    expect(blob).not.toContain(marker);
+    expectLacks("result+audit+logs", blob, marker);
     expect(seen[0].url.startsWith("https://api.anthropic.com/")).toBe(true);
   });
   it("REAL Anthropic adapter: 401 maps to PROVIDER_AUTH and is NOT retried", async () => {
