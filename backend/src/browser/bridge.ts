@@ -82,6 +82,14 @@ export class BrowserBridge {
         await route.abort("blockedbyclient");
       } catch { /* page/context already closed */ }
     });
+    // WebSockets are NOT covered by context.route(). The synthetic site needs none, so every socket is refused and
+    // never connected to its target (we do not call connectToServer()).
+    await this.context.routeWebSocket(/.*/, (ws) => {
+      this.audit.record({ task_id: this.taskId, category: "websocket", outcome: "blocked", code: "WEBSOCKET_NOT_ALLOWED" });
+      this.violation ??= { code: "WEBSOCKET_NOT_ALLOWED", category: "offsite" };
+      log("websocket_blocked");
+      void ws.close({ code: 1008, reason: "blocked" });
+    });
     // Popups are never allowed: close immediately (their own requests are also routed/blocked).
     let claimed = false; // the first page of this fresh context is our own task tab
     this.context.on("page", (p) => {
@@ -117,15 +125,42 @@ export class BrowserBridge {
     }
   }
 
-  /** Boolean only: no DOM content ever crosses to Node for this check. */
+  /** Boolean only: no DOM content ever crosses to Node for this check. Checks the URL and EVERY frame (incl. iframes). */
   async isAuthPage(): Promise<boolean> {
     if (!this.page) return false;
     const u = checkUrl(this.page.url(), this.siteOrigin);
     if (u.ok && /^\/(login|signin|sign-in|auth|sso|oauth)/i.test(u.url.pathname)) return true;
-    return this.page.evaluate(AUTH_SCRIPT);
+    for (const f of this.page.frames()) {
+      const fu = f.url();
+      if (fu && fu !== "about:blank") {
+        const c = checkUrl(fu, this.siteOrigin);
+        if (c.ok && /^\/(login|signin|sign-in|auth|sso|oauth)/i.test(c.url.pathname)) return true;
+      }
+      try { if (await f.evaluate(AUTH_SCRIPT)) return true; } catch { return true; } // unreadable frame => fail closed
+    }
+    return false;
   }
-  async extractRecord() { return this.page!.evaluate(RECORD_SCRIPT); }
-  async extractResults() { return this.page!.evaluate(RESULTS_SCRIPT); }
+
+  /** Re-validated immediately before EVERY extraction: current URL still approved, and not an auth page (any frame). */
+  private async guardExtract(): Promise<{ kind: "auth" } | { kind: "blocked"; code: PolicyCode } | null> {
+    if (!this.page) return { kind: "blocked", code: "ROUTE_NOT_ALLOWED" };
+    const d = classifyRequest({ url: this.page.url(), method: "GET", isNavigation: true }, this.siteOrigin);
+    if (!d.allow) {
+      this.audit.record({ task_id: this.taskId, category: "inspect", outcome: "blocked", code: "EXTRACTION_URL_CHANGED" });
+      this.violation ??= { code: "EXTRACTION_URL_CHANGED", category: d.category };
+      return { kind: "blocked", code: d.code };
+    }
+    if (await this.isAuthPage()) return { kind: "auth" };
+    return null;
+  }
+  async extractRecord() {
+    const g = await this.guardExtract(); if (g) return g;
+    return { kind: "ok" as const, data: await this.page!.evaluate(RECORD_SCRIPT) };
+  }
+  async extractResults() {
+    const g = await this.guardExtract(); if (g) return g;
+    return { kind: "ok" as const, data: await this.page!.evaluate(RESULTS_SCRIPT) };
+  }
   async close() { await this.closeTaskTab(); try { await this.browser?.close(); } catch { /* ignore */ } }
   async disconnect() { await this.closeTaskTab(); this.browser = undefined; }
 }

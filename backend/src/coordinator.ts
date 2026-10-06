@@ -196,7 +196,10 @@ export class TaskRunner {
           done("allowed"); progress(`Step ${steps}: navigate allowed`);
           reply({ ok: true, data: { navigated: true } });
         } else if (name === "lookup_record") {
-          const res = await this.bridge.extractResults();
+          const ex = await this.bridge.extractResults();
+          if (ex.kind === "auth") { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
+          if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
+          const res = ex.data;
           if (!res) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
           const url = this.bridge.currentUrl(); const at = new Date().toISOString();
           links = new Map(); const out: { link_id: string; record_id: string }[] = [];
@@ -216,13 +219,19 @@ export class TaskRunner {
         } else if (name === "inspect") {
           if (await this.bridge.isAuthPage()) { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
           if (v.input.region === "results") {
-            const res = await this.bridge.extractResults();
+            const ex = await this.bridge.extractResults();
+            if (ex.kind === "auth") { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
+            if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
+            const res = ex.data;
             if (!res) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
             const out = res.items.map((it) => ({ record_id: it.record_id }));
             const body = JSON.stringify({ ok: true, data: { untrusted_page_data: true, results: out } });
             extracted += body.length; done("ok"); msgs.push({ role: "tool", toolCallId: call.id, content: body.slice(0, b.maxInspectChars) });
           } else {
-            const rec = await this.bridge.extractRecord();
+            const ex = await this.bridge.extractRecord();
+            if (ex.kind === "auth") { done("paused", "AUTH_REQUIRED"); return finalize(result("human_action_required", "AUTH_REQUIRED")); }
+            if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
+            const rec = ex.data;
             if (!rec) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
             const url = this.bridge.currentUrl();
             const fields: Record<string, { source: string; value: string }[]> = {};

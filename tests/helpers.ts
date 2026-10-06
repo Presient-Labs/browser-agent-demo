@@ -77,10 +77,10 @@ import type { ProviderRequest, ProviderResponse, Msg } from "../backend/src/prov
 export class ScriptedProvider implements ModelProvider {
   readonly id = "fake"; readonly mode = "FAKE" as const; readonly model = "scripted";
   calls = 0; seen: Msg[][] = [];
-  constructor(private steps: { name: string; input: unknown }[], public onCall?: (n: number) => void) {}
+  constructor(private steps: { name: string; input: unknown }[], public onCall?: (n: number) => void | Promise<void>) {}
   async complete(req: ProviderRequest): Promise<ProviderResponse> {
     this.calls++; this.seen.push(JSON.parse(JSON.stringify(req.messages)));
-    this.onCall?.(this.calls);
+    await this.onCall?.(this.calls);
     const s = this.steps[this.calls - 1] ?? { name: "finish", input: { status: "uncertain", record_id: "SYN-1042", fields: {} } };
     return { toolCalls: [{ id: `s${this.calls}`, name: s.name, input: s.input }], usage: { inputTokens: 100, outputTokens: 10 } };
   }

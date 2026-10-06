@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 export type ActionCategory =
   | "task" | "model_call" | "navigate" | "inspect" | "lookup_record" | "open_record" | "finish"
-  | "subresource" | "popup" | "auth_check" | "provider_config" | "api_auth";
+  | "subresource" | "popup" | "auth_check" | "provider_config" | "api_auth" | "websocket";
 export type Outcome = "allowed" | "blocked" | "paused" | "ok" | "rejected" | "error" | "stopped";
 
 /** Metadata ONLY. Fields are closed enums / ids / numbers; there is no free-text field by construction. */

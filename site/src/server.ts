@@ -109,6 +109,23 @@ export async function startSite(opts: SiteOptions): Promise<SiteHandle> {
 <script>fetch("/api/mutate",{method:"POST"}).catch(()=>{});
 const f=document.createElement("form");f.method="post";f.action="/records/SYN-1042/delete";document.body.appendChild(f);setTimeout(()=>f.submit(),50);</script>`));
     }
+    if (p === "/fixtures/websocket") {
+      return send(200, layout("WebSocket fixture", `<h1>WebSocket fixture</h1><section data-agent-region="results" data-count="0"></section>
+<script>try{new WebSocket("ws://127.0.0.1:4102/")}catch(e){}</script>`));
+    }
+    if (p === "/fixtures/iframe-login") {
+      return send(200, layout("Iframe login fixture", `<h1>Results</h1><section data-agent-region="results" data-count="0"></section>
+<iframe src="/login-challenge" title="embedded sign-in" width="400" height="200"></iframe>`));
+    }
+    if (p === "/fixtures/pushstate") { // after the navigation settles, rewrites its own URL to a non-approved route
+      return send(200, layout("pushState fixture", `<h1>Claim record</h1>
+<section data-agent-region="record" data-record-id="SYN-1042"><dl><dt>balance</dt><dd data-field="balance" data-source="billing">1284.55</dd></dl></section>
+<script>setTimeout(()=>history.pushState({}, "", "/records/SYN-1042/delete"), 700)</script>`));
+    }
+    if (p === "/fixtures/client-redirect") { // after the navigation settles, client-side navigates to the auth page
+      return send(200, layout("Client redirect fixture", `<h1>Results</h1><section data-agent-region="results" data-count="0"></section>
+<script>setTimeout(()=>location.assign("/login-challenge"), 700)</script>`));
+    }
     if (p === "/fixtures/offsite-subresource") {
       return send(200, layout("Subresource fixture", `<h1>Subresource fixture</h1><section data-agent-region="results" data-count="0"></section>
 <img src="http://127.0.0.1:4101/pixel.png" alt="">`));
