@@ -1,0 +1,10 @@
+{
+  "name": "@demo/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "test:real": "vitest run --config vitest.config.ts real-provider"
+  }
+}

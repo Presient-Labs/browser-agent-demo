@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Records Agent Panel (synthetic demo)",
+  "version": "0.1.0",
+  "description": "Side-panel chat for a constrained browser agent. Synthetic data only.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3g2MOe/+T+cns1Sk1BgAYGUwNHoDsKrQWUGWGWMR4XIkQ5SKR9Y1J4zXwikuUlGu7ULigBrZLapOI/0bHDKqfwt+Hk/1rUgLJmT5J03Qq/eIhv518B+AIpspvxVCYx0/SsAQjqzP4n/g8jrp2DKgqOTMm5p4V5A5Utuo+nyBNDVumOAGVvd32DF+qkhmFzkZgSpjmKsatr7C2kKGA+v9mnJCtJZFJGYJz2zjlSYeLJ1sqCrZyuvl2B9G7Op0gn8CUscnl0KyGxbAMicEOB0wAteNboyQysv1blVl5fjTbtXZZ+EuWrx2cx+pZjvpKYtvbfqNHEBWh1H3l8qsIg3KuQIDAQAB",
+  "minimum_chrome_version": "114",
+  "permissions": ["sidePanel"],
+  "host_permissions": ["http://127.0.0.1:4200/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Open Records Agent panel" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://127.0.0.1:4200 ws://127.0.0.1:4200" }
+}

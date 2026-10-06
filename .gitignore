@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+extension/dist/
+*.log
+test-output/
+.tmp/
+coverage/
+*.mp4

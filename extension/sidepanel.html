@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Records Agent</title>
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<header>
+  <h1>Records Agent</h1>
+  <div class="badges">
+    <span id="mode-badge" class="badge" role="status" aria-label="model mode">MODE: unknown</span>
+    <span class="badge synth">SYNTHETIC DATA ONLY</span>
+  </div>
+</header>
+
+<section id="connect" aria-labelledby="connect-h">
+  <h2 id="connect-h">Connect</h2>
+  <label for="secret">Session secret (printed by the backend terminal)</label>
+  <div class="row">
+    <input id="secret" type="password" autocomplete="off" spellcheck="false">
+    <button id="connect-btn" type="button">Connect</button>
+  </div>
+  <p id="conn-msg" class="muted" role="status">Not connected.</p>
+</section>
+
+<section id="task" aria-labelledby="task-h" hidden>
+  <h2 id="task-h">Task</h2>
+  <label for="task-input">Describe the lookup</label>
+  <textarea id="task-input" rows="3" maxlength="500">Find synthetic record SYN-1042 and report its claim status and balance.</textarea>
+  <div class="row">
+    <button id="run-btn" type="button" class="primary">Run</button>
+    <button id="stop-btn" type="button" class="danger" disabled>Stop</button>
+    <span id="state" class="state idle" role="status" aria-live="polite">idle</span>
+  </div>
+  <ol id="progress" aria-label="Progress" class="progress"></ol>
+</section>
+
+<section id="result-card" aria-labelledby="result-h" hidden>
+  <h2 id="result-h">Result</h2>
+  <div id="result-body"></div>
+</section>
+
+<details id="audit" hidden>
+  <summary>Audit metadata (no content)</summary>
+  <table>
+    <thead><tr><th>time (UTC)</th><th>task</th><th>action</th><th>category</th><th>outcome</th><th>code</th><th>ms</th></tr></thead>
+    <tbody id="audit-rows"></tbody>
+  </table>
+</details>
+
+<details id="unsupported" hidden>
+  <summary>Unsupported in Milestone 1</summary>
+  <ul id="unsupported-list"></ul>
+</details>
+<script src="sidepanel.js"></script>
+</body>
+</html>

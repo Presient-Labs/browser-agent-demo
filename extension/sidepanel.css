@@ -1,0 +1,15 @@
+:root{--bg:#fff;--fg:#17202a;--muted:#5d6b7a;--line:#d5dbe3;--accent:#1f4f8f;--warn:#9a5b00;--bad:#a12626;--ok:#1b6b3a}
+@media (prefers-color-scheme:dark){:root{--bg:#14181d;--fg:#e6ebf1;--muted:#9aa7b5;--line:#2b3440;--accent:#7fb0ee;--warn:#e0a84d;--bad:#ef7b7b;--ok:#6fd199}}
+*{box-sizing:border-box}body{margin:0;padding:10px;font:13px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}h1{font-size:16px;margin:0}h2{font-size:13px;margin:12px 0 6px}
+.badges{display:flex;gap:6px;flex-wrap:wrap}.badge{border:1px solid var(--line);border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700}
+.badge.fake{color:var(--warn);border-color:var(--warn)}.badge.real{color:var(--ok);border-color:var(--ok)}.badge.synth{color:var(--bad);border-color:var(--bad)}
+label{display:block;margin-bottom:3px;color:var(--muted)}input,textarea{width:100%;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);font:inherit}
+.row{display:flex;gap:6px;align-items:center;margin-top:6px}button{padding:6px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);cursor:pointer;font:inherit}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}button.danger{color:var(--bad);border-color:var(--bad)}button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.muted{color:var(--muted)}.state{margin-left:auto;font-weight:700;text-transform:uppercase;font-size:11px}
+.state.running::after{content:" …"}.state.success{color:var(--ok)}.state.blocked,.state.error{color:var(--bad)}.state.human_action_required,.state.uncertain,.state.not_found{color:var(--warn)}
+.progress{margin:8px 0;padding-left:18px;color:var(--muted)}table{width:100%;border-collapse:collapse;font-size:11px}th,td{border-bottom:1px solid var(--line);padding:3px 4px;text-align:left;word-break:break-word}
+.card{border:1px solid var(--line);border-radius:6px;padding:8px}.card dt{color:var(--muted);margin-top:6px}.card dd{margin:0;font-weight:600}
+.note{margin-top:8px;padding:6px;border-left:3px solid var(--warn);background:rgba(154,91,0,.08)}details{margin-top:12px}summary{cursor:pointer}

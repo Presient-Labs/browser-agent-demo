@@ -1,0 +1,41 @@
+{
+  "name": "browser-agent-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent portfolio demo: constrained browser agent over a synthetic records site. Synthetic data only.",
+  "license": "MIT",
+  "workspaces": [
+    "site",
+    "backend",
+    "extension",
+    "tests"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w extension && npm run typecheck",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run test -w tests",
+    "test:real": "npm run test:real -w tests",
+    "start:site": "tsx site/src/main.ts",
+    "start:backend": "tsx backend/src/main.ts",
+    "browser": "bash scripts/launch-browser.sh",
+    "demo": "bash scripts/demo-run.sh"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.4",
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "playwright": "^1.63.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  }
+}
