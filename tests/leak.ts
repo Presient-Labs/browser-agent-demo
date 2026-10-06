@@ -40,3 +40,9 @@ export function expectNoMarkers(label: string, text: string) {
 /** Content-safe presence checks: failures print only the label, never the text or the needle. */
 export function expectHas(label: string, text: string, needle: string) { expect(`${label}: ${text.includes(needle) ? "present" : "ABSENT"}`).toBe(`${label}: present`); }
 export function expectLacks(label: string, text: string, needle: string) { expect(`${label}: ${text.includes(needle) ? "PRESENT" : "absent"}`).toBe(`${label}: absent`); }
+
+/** Content-safe equality: on mismatch only the label is shown, never either value. */
+export function expectEq(label: string, actual: unknown, expected: unknown) {
+  const same = JSON.stringify(actual) === JSON.stringify(expected);
+  expect(`${label}: ${same ? "equal" : "DIFFERENT"}`).toBe(`${label}: equal`);
+}

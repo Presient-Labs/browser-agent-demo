@@ -134,6 +134,7 @@ export class TaskRunner {
 
       for (;;) {
         { const g = gate(); if (g) return finalize(g); }
+        if (extracted > b.maxTotalExtractedChars) return finalize(result("error", "EXTRACTION_BUDGET")); // covers every continue path
 
         // ---- model call with bounded retries ----
         let resp;
@@ -229,7 +230,7 @@ export class TaskRunner {
           extracted += ex.bytes;
           if (!res) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
           if (ex.truncated) { done("error", "INSPECT_TRUNCATED"); reply({ ok: false, error: "INSPECT_TRUNCATED" }); continue; }
-          const url = this.bridge.currentUrl(); const at = new Date().toISOString();
+          const url = ex.href; const at = new Date().toISOString();
           links = new Map(); const out: { link_id: string; record_id: string }[] = [];
           res.items.slice(0, 20).forEach((it, i) => {
             if (!/^SYN-\d{4}$/.test(it.record_id)) return;
@@ -267,7 +268,7 @@ export class TaskRunner {
             if (ex.kind === "blocked") { done("blocked", "EXTRACTION_URL_CHANGED"); return finalize(result("blocked", "POLICY_BLOCKED")); }
             const rec = ex.data;
             if (!rec) { done("error", "UNSUPPORTED_CONTENT"); reply({ ok: false, error: "UNSUPPORTED_CONTENT" }); continue; }
-            const url = this.bridge.currentUrl();
+            const url = ex.href;
             const fields: Record<string, { source: string; value: string }[]> = {};
             const ev: Record<string, string[]> = {};
             for (const f of rec.fields) {

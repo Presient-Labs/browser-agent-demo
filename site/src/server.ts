@@ -172,6 +172,33 @@ Element.prototype.querySelectorAll=function(s){return hide(s)?[]:eqa.call(this,s
       const rows = Array.from({ length: 6000 }, (_, i) => `<dd data-field="payer" data-source="${big}">v${i}${big}</dd>`).join("");
       return send(200, layout("Huge", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>${rows}</dl></section>`));
     }
+    // ---- round-2 fixtures ----
+    if (p === "/fixtures/n1-hidden-desc") {
+      return send(200, layout("N1 hidden descendants", `<h1>Claim record</h1><section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dd data-field="balance" data-source="billing">1284.55<span hidden>AUTHSECRET-n1a</span></dd>
+<dd data-field="payer" data-source="billing">Visible payer<span style="opacity:0">AUTHSECRET-n1b</span></dd>
+<dd data-field="service_date" data-source="billing" style="opacity:0">AUTHSECRET-n1c</dd>
+<dd data-field="claim_status" data-source="billing">Paid<span aria-hidden="true">AUTHSECRET-n1d</span><span style="visibility:hidden">AUTHSECRET-n1e</span><div style="display:none">AUTHSECRET-n1f</div></dd>
+</dl></section>`));
+    }
+    if (p === "/fixtures/n1-shadow-open" || p === "/fixtures/n1-shadow-closed") {
+      const mode = p.endsWith("open") ? "open" : "closed";
+      return send(200, layout("N1 shadow", `<h1>Claim record</h1><section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dd data-field="balance" data-source="billing">1284.55</dd></dl></section><div id="h"></div>
+<script>const r=document.getElementById("h").attachShadow({mode:"${mode}"});r.innerHTML='<input type="password" name="pw"><span>AUTHSECRET-n1-shadow</span>';</script>`));
+    }
+    if (p === "/fixtures/n5-spaces") {
+      return send(200, layout("N5 spaces", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dd data-field="claim_status" data-source="billing">Paid${" ".repeat(500)}(reversed; denied)</dd></dl></section>`));
+    }
+    if (p === "/fixtures/n5-long") {
+      return send(200, layout("N5 long", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dd data-field="payer" data-source="billing">${"A".repeat(600)}</dd></dl></section>`));
+    }
+    if (p === "/fixtures/huge-results") {
+      const lis = Array.from({ length: 3000 }, () => `<li data-agent-result data-record-id="SYN-1042"><a href="/records/SYN-1042">SYN-1042</a></li>`).join("");
+      return send(200, layout("Huge results", `<section data-agent-region="results" data-count="3000"><ul>${lis}</ul></section>`));
+    }
     if (p === "/fixtures/offsite-subresource") {
       return send(200, layout("Subresource fixture", `<h1>Subresource fixture</h1><section data-agent-region="results" data-count="0"></section>
 <img src="http://127.0.0.1:4101/pixel.png" alt="">`));

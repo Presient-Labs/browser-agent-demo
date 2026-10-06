@@ -12,17 +12,47 @@ export interface Violation { code: PolicyCode; category: Decision["category"] }
  * Element.prototype.* etc. in its own (main) world cannot influence what these scripts see. The model never supplies code.
  */
 const CRED_SELECTOR = 'input[type="password"], input[autocomplete="one-time-code"], input[autocomplete="current-password"], input[name*="otp" i], input[name*="mfa" i]';
-const AUTH_SRC = `(function(){ return Document.prototype.querySelectorAll.call(document, ${JSON.stringify(CRED_SELECTOR)}).length > 0; })`;
+/** Credential-field search that also descends into OPEN shadow roots (closed ones are covered by the CDP pierce scan in isAuthPage). */
+const HAS_CRED_SRC = `function hasCred(root, depth){
+  var Ep = Element.prototype;
+  var sel = ${JSON.stringify(CRED_SELECTOR)};
+  var qs = (root.nodeType === 9 ? Document.prototype.querySelectorAll : (root.nodeType === 11 ? DocumentFragment.prototype.querySelectorAll : Ep.querySelectorAll));
+  if (qs.call(root, sel).length > 0) return true;
+  if (depth > 8) return true; // absurd nesting: fail closed
+  var all = qs.call(root, "*");
+  for (var i = 0; i < all.length && i < 5000; i++) { var sr = all[i].shadowRoot; if (sr && hasCred(sr, depth + 1)) return true; }
+  return false;
+}`;
+const AUTH_SRC = `(function(){ ${HAS_CRED_SRC} return hasCred(document, 0); })`;
 /** Fields the agent may ever read. Anything else (including hidden/undeclared data-* elements) is ignored. */
 export const EXTRACTABLE_FIELDS = ["claim_status", "balance", "payer", "service_date", "notes"] as const;
 const COMBINED_SRC = `(function(arg){
+  ${HAS_CRED_SRC}
   var kind = arg.kind, caps = arg.caps, allow = arg.allow;
   var Dp = Document.prototype, Ep = Element.prototype;
   var href = location.href;
-  var auth = Dp.querySelectorAll.call(document, ${JSON.stringify(CRED_SELECTOR)}).length > 0;
+  var auth = hasCred(document, 0);
   if (auth) return { href: href, auth: true, truncated: false, bytes: 0, data: null };
   var attr = function(el, n){ return Ep.getAttribute.call(el, n) || ""; };
-  var visible = function(el){ try { var cs = getComputedStyle(el); return cs.display !== "none" && cs.visibility !== "hidden" && el.getClientRects().length > 0; } catch (e) { return false; } };
+  // own rendering of one element: display, visibility, opacity, hidden/aria-hidden attributes, non-empty box
+  var ownVisible = function(el){
+    try {
+      var cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || cs.visibility === "collapse" || parseFloat(cs.opacity) === 0) return false;
+      if (Ep.hasAttribute.call(el, "hidden") || attr(el, "aria-hidden") === "true") return false;
+      return el.getClientRects().length > 0;
+    } catch (e) { return false; }
+  };
+  var chainVisible = function(el){ for (var n = el; n && n.nodeType === 1; n = n.parentElement) { if (!ownVisible(n)) return false; } return true; };
+  // visible text only: walk descendants, skipping any subtree whose element is not visibly rendered
+  var cutText = false;
+  var collect = function(node, st){
+    if (st.len > caps.maxChars) return;
+    if (node.nodeType === 3) { var t = String(node.data).replace(/\\s+/g, " "); st.out += t; st.len += t.length; return; }
+    if (node.nodeType !== 1) return;
+    if (st.top !== node && !ownVisible(node)) return;
+    for (var c = node.firstChild; c; c = c.nextSibling) collect(c, st);
+  };
   var bytes = 0, truncated = false;
   var take = function(n){ bytes += n; if (bytes > caps.maxBytes) { truncated = true; return false; } return true; };
   if (kind === "record") {
@@ -34,12 +64,16 @@ const COMBINED_SRC = `(function(arg){
     for (var i = 0; i < nodes.length && i < caps.maxScan; i++) {
       var el = nodes[i];
       var name = attr(el, "data-field");
-      if (allow.indexOf(name) < 0 || !visible(el)) continue;
+      if (allow.indexOf(name) < 0 || !chainVisible(el)) continue;
       if (fields.length >= caps.maxFields) { truncated = true; break; }
-      var src = attr(el, "data-source").slice(0, caps.maxSource);
+      var src = attr(el, "data-source");
+      if (src.length > caps.maxSource) { truncated = true; }
+      src = src.slice(0, caps.maxSource);
       if (!/^[A-Za-z ]{0,40}$/.test(src)) src = "";
-      var tc = el.firstChild && el.childNodes.length === 1 && el.firstChild.nodeType === 3 ? el.firstChild.data : (el.textContent || "");
-      var val = String(tc).trim().slice(0, caps.maxChars);
+      var st = { out: "", len: 0, top: el };
+      collect(el, st);
+      var val = st.out.trim();
+      if (val.length > caps.maxChars) { truncated = true; val = val.slice(0, caps.maxChars); }
       if (!take(name.length + src.length + val.length + 20)) break;
       fields.push({ field: name, source: src, value: val });
     }
@@ -53,8 +87,11 @@ const COMBINED_SRC = `(function(arg){
   for (var j = 0; j < lis.length && j < caps.maxScan; j++) {
     if (items.length >= caps.maxResults) { truncated = true; break; }
     var li = lis[j];
+    if (!chainVisible(li)) continue;
     var a = Ep.querySelector.call(li, "a");
-    var h = a ? String(a.href).slice(0, 300) : "";
+    var h = a ? String(a.href) : "";
+    if (h.length > 300) truncated = true;
+    h = h.slice(0, 300);
     var r = attr(li, "data-record-id").slice(0, 16);
     if (!take(h.length + r.length + 20)) break;
     items.push({ record_id: r, href: h });
@@ -76,7 +113,7 @@ export class BrowserBridge {
   private cdp?: CDPSession;
   private redirectTarget?: string;
   /** TEST-ONLY seam (not reachable from the model, the API or the extension): runs page mutations at precise points. */
-  testSeam?: { beforeExtract?: (p: Page) => Promise<void>; afterExtract?: (p: Page) => Promise<void>; beforeGoto?: () => Promise<void> };
+  testSeam?: { beforeExtract?: (p: Page) => Promise<void>; afterExtract?: (p: Page) => Promise<void>; beforeGoto?: () => Promise<void>; afterPostCheck?: (p: Page) => Promise<void> };
   constructor(private siteOrigin: string, private audit: AuditStore) {}
 
   /** Connect to the dedicated browser over loopback CDP only. */
@@ -213,6 +250,23 @@ export class BrowserBridge {
     if (!this.page) return false;
     const u = checkUrl(this.page.url(), this.siteOrigin);
     if (u.ok && /^\/(login|signin|sign-in|auth|sso|oauth)/i.test(u.url.pathname)) return true;
+    // Closed shadow roots (invisible to page script) are exposed by CDP's pierced DOM tree: scan it for credential inputs too.
+    try {
+      const doc = (await this.cdp!.send("DOM.getDocument", { depth: -1, pierce: true })) as any;
+      const stack = [doc.root];
+      let seen = 0;
+      while (stack.length) {
+        const n = stack.pop();
+        if (++seen > 20000) return true; // absurd DOM: fail closed
+        if (n.nodeType === 1 && String(n.nodeName).toUpperCase() === "INPUT") {
+          const at: Record<string, string> = {};
+          for (let i = 0; i + 1 < (n.attributes?.length ?? 0); i += 2) at[String(n.attributes[i]).toLowerCase()] = String(n.attributes[i + 1]);
+          if ((at.type ?? "").toLowerCase() === "password" || /one-time-code|current-password/i.test(at.autocomplete ?? "") || /otp|mfa/i.test(at.name ?? "")) return true;
+        }
+        for (const k of ["children", "shadowRoots"]) for (const c of n[k] ?? []) stack.push(c);
+        if (n.contentDocument) stack.push(n.contentDocument);
+      }
+    } catch { return true; } // cannot inspect => fail closed
     let frames: { id: string; url: string }[];
     try { frames = await this.frameTree(); } catch { return true; } // fail closed
     for (const f of frames) {
@@ -254,8 +308,12 @@ export class BrowserBridge {
     await this.testSeam?.afterExtract?.(this.page!);
     const after = classifyRequest({ url: this.page!.url(), method: "GET", isNavigation: true }, this.siteOrigin);
     if (!after.allow || this.page!.url() !== one.href) return this.blockedExtraction(after.category, after.allow ? "ROUTE_NOT_ALLOWED" : after.code);
+    await this.testSeam?.afterPostCheck?.(this.page!);
     if (await this.isAuthPage()) return { kind: "auth" as const };
-    return { kind: "ok" as const, data: one.data, truncated: one.truncated, bytes: one.bytes };
+    // the LAST thing before returning: re-validate the route after every await above
+    const last = classifyRequest({ url: this.page!.url(), method: "GET", isNavigation: true }, this.siteOrigin);
+    if (!last.allow || this.page!.url() !== one.href) return this.blockedExtraction(last.category, last.allow ? "ROUTE_NOT_ALLOWED" : last.code);
+    return { kind: "ok" as const, data: one.data, truncated: one.truncated, bytes: one.bytes, href: one.href };
   }
   private blockedExtraction(category: Decision["category"], code: PolicyCode) {
     this.audit.record({ task_id: this.taskId, category: "inspect", outcome: "blocked", code: "EXTRACTION_URL_CHANGED" });
@@ -264,11 +322,11 @@ export class BrowserBridge {
   }
   async extractRecord(maxBytes = 4000) {
     const r = await this.extract("record", maxBytes);
-    return r.kind === "ok" ? { kind: "ok" as const, data: r.data as (RecordData & { truncated?: boolean }) | null, truncated: r.truncated, bytes: r.bytes } : r;
+    return r.kind === "ok" ? { kind: "ok" as const, data: r.data as (RecordData & { truncated?: boolean }) | null, truncated: r.truncated, bytes: r.bytes, href: r.href } : r;
   }
   async extractResults(maxBytes = 4000) {
     const r = await this.extract("results", maxBytes);
-    return r.kind === "ok" ? { kind: "ok" as const, data: r.data as ResultsData | null, truncated: r.truncated, bytes: r.bytes } : r;
+    return r.kind === "ok" ? { kind: "ok" as const, data: r.data as ResultsData | null, truncated: r.truncated, bytes: r.bytes, href: r.href } : r;
   }
   async close() { await this.closeTaskTab(); try { await this.browser?.close(); } catch { /* ignore */ } }
   async disconnect() { await this.closeTaskTab(); this.browser = undefined; }
