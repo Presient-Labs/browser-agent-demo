@@ -46,11 +46,11 @@ export interface Stack {
   close: () => Promise<void>;
 }
 
-export async function startStack(cfgOverride: Record<string, string> = {}): Promise<Stack> {
+export async function startStack(cfgOverride: Record<string, string> = {}, browserOpts: { headed?: boolean; extensionDir?: string } = {}): Promise<Stack> {
   const site = await startSite({ port: 4100, testEndpoints: true });
   const evil = await startEvil();
   const noSandbox = process.env.NO_SANDBOX === "1";
-  const browser = await launchDedicatedBrowser({ port: CDP_PORT, headless: true, noSandbox });
+  const browser = await launchDedicatedBrowser({ port: CDP_PORT, headless: !browserOpts.headed, noSandbox, extensionDir: browserOpts.extensionDir });
   const audit = new AuditStore();
   const cfg = loadConfig({ RETRY_BACKOFF_MS: "1", ...cfgOverride });
   const logs: string[] = [];
