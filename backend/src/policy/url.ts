@@ -19,7 +19,7 @@ const READ_ROUTES: RegExp[] = [
   /^\/login-challenge$/,
   /^\/redirect-offsite$/, // fixtures used to prove redirect checks
   /^\/redirect-onsite$/,
-  /^\/fixtures\/(popup|auto-write|offsite-subresource|websocket|iframe-login|pushstate|client-redirect)$/,
+  /^\/fixtures\/(popup|auto-write|offsite-subresource|websocket|iframe-login|pushstate|client-redirect|egress|flip-auth)$/,
 ];
 const WRITE_ROUTE = /\/(update|submit|delete|save|send)(\/|$)|^\/api\/|^\/login-challenge\/submit$/;
 

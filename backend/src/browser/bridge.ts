@@ -8,24 +8,23 @@ export interface Violation { code: PolicyCode; category: Decision["category"] }
 /** Fixed, server-owned page scripts. The model never supplies code or selectors. */
 const AUTH_SCRIPT = () =>
   !!document.querySelector('input[type="password"], input[autocomplete="one-time-code"], input[autocomplete="current-password"], input[name*="otp" i], input[name*="mfa" i]');
-const RECORD_SCRIPT = () => {
-  const root = document.querySelector('[data-agent-region="record"]');
-  if (!root) return null;
-  const fields: { field: string; source: string; value: string }[] = [];
-  root.querySelectorAll("[data-field]").forEach((el) => {
-    fields.push({ field: el.getAttribute("data-field") || "", source: el.getAttribute("data-source") || "", value: (el.textContent || "").trim().slice(0, 400) });
-  });
-  return { recordId: root.getAttribute("data-record-id") || "", fields };
-};
-const RESULTS_SCRIPT = () => {
+/** Single-turn: URL + credential-field check + extraction in one page evaluation (fixed, server-owned code). */
+const COMBINED_SCRIPT = (kind: "record" | "results") => {
+  const href = location.href;
+  const auth = !!document.querySelector('input[type="password"], input[autocomplete="one-time-code"], input[autocomplete="current-password"], input[name*="otp" i], input[name*="mfa" i]');
+  if (auth) return { href, auth, data: null as any };
+  if (kind === "record") {
+    const root = document.querySelector('[data-agent-region="record"]');
+    if (!root) return { href, auth, data: null as any };
+    const fields: { field: string; source: string; value: string }[] = [];
+    root.querySelectorAll("[data-field]").forEach((el) => fields.push({ field: el.getAttribute("data-field") || "", source: el.getAttribute("data-source") || "", value: (el.textContent || "").trim().slice(0, 400) }));
+    return { href, auth, data: { recordId: root.getAttribute("data-record-id") || "", fields } as any };
+  }
   const root = document.querySelector('[data-agent-region="results"]');
-  if (!root) return null;
+  if (!root) return { href, auth, data: null as any };
   const items: { record_id: string; href: string }[] = [];
-  root.querySelectorAll("[data-agent-result]").forEach((li) => {
-    const a = li.querySelector("a");
-    items.push({ record_id: li.getAttribute("data-record-id") || "", href: a ? (a as HTMLAnchorElement).href : "" });
-  });
-  return { items };
+  root.querySelectorAll("[data-agent-result]").forEach((li) => { const a = li.querySelector("a"); items.push({ record_id: li.getAttribute("data-record-id") || "", href: a ? (a as HTMLAnchorElement).href : "" }); });
+  return { href, auth, data: { items } as any };
 };
 
 export class BrowserBridge {
@@ -34,6 +33,8 @@ export class BrowserBridge {
   private page?: Page;
   private taskId = "";
   private violation?: Violation;
+  /** TEST-ONLY seam (not reachable from the model, the API or the extension): runs page mutations at precise points. */
+  testSeam?: { beforeExtract?: (p: Page) => Promise<void>; afterExtract?: (p: Page) => Promise<void> };
   constructor(private siteOrigin: string, private audit: AuditStore) {}
 
   /** Connect to the dedicated browser over loopback CDP only. */
@@ -153,13 +154,36 @@ export class BrowserBridge {
     if (await this.isAuthPage()) return { kind: "auth" };
     return null;
   }
-  async extractRecord() {
+  /**
+   * check -> extract -> re-check. The main-frame read is ONE evaluate that returns {href, auth, data} in a single JS turn,
+   * so a page timer cannot slip between the check and the read. After the read the URL and ALL frames are re-checked;
+   * on any failure or difference the data is dropped here and never returned to the coordinator (or model).
+   */
+  private async extract(kind: "record" | "results") {
     const g = await this.guardExtract(); if (g) return g;
-    return { kind: "ok" as const, data: await this.page!.evaluate(RECORD_SCRIPT) };
+    await this.testSeam?.beforeExtract?.(this.page!);
+    const one = await this.page!.evaluate(COMBINED_SCRIPT, kind);
+    const d = classifyRequest({ url: one.href, method: "GET", isNavigation: true }, this.siteOrigin);
+    if (!d.allow) return this.blockedExtraction(d.category, d.code);
+    if (one.auth) return { kind: "auth" as const };
+    await this.testSeam?.afterExtract?.(this.page!);
+    const after = classifyRequest({ url: this.page!.url(), method: "GET", isNavigation: true }, this.siteOrigin);
+    if (!after.allow || this.page!.url() !== one.href) return this.blockedExtraction(after.category, after.allow ? "ROUTE_NOT_ALLOWED" : after.code);
+    if (await this.isAuthPage()) return { kind: "auth" as const };
+    return { kind: "ok" as const, data: one.data };
+  }
+  private blockedExtraction(category: Decision["category"], code: PolicyCode) {
+    this.audit.record({ task_id: this.taskId, category: "inspect", outcome: "blocked", code: "EXTRACTION_URL_CHANGED" });
+    this.violation ??= { code: "EXTRACTION_URL_CHANGED", category };
+    return { kind: "blocked" as const, code };
+  }
+  async extractRecord() {
+    const r = await this.extract("record");
+    return r.kind === "ok" ? { kind: "ok" as const, data: r.data as { recordId: string; fields: { field: string; source: string; value: string }[] } | null } : r;
   }
   async extractResults() {
-    const g = await this.guardExtract(); if (g) return g;
-    return { kind: "ok" as const, data: await this.page!.evaluate(RESULTS_SCRIPT) };
+    const r = await this.extract("results");
+    return r.kind === "ok" ? { kind: "ok" as const, data: r.data as { items: { record_id: string; href: string }[] } | null } : r;
   }
   async close() { await this.closeTaskTab(); try { await this.browser?.close(); } catch { /* ignore */ } }
   async disconnect() { await this.closeTaskTab(); this.browser = undefined; }

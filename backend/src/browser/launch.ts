@@ -10,6 +10,8 @@ export interface LaunchOpts {
   headless?: boolean; // true => --headless=new (tests). false => headed (needs a display, e.g. xvfb-run)
   userDataDir?: string; // default: fresh mktemp dir, deleted on close
   noSandbox?: boolean;
+  /** Loopback ports Chrome may reach directly (synthetic site + backend). Everything else goes to a dead proxy. */
+  allowLoopbackPorts?: number[];
 }
 export interface DedicatedBrowser {
   proc: ChildProcess;
@@ -27,6 +29,14 @@ export function chromeArgs(o: LaunchOpts & { userDataDir: string }): string[] {
     `--user-data-dir=${o.userDataDir}`,
     "--remote-debugging-address=127.0.0.1",
     `--remote-debugging-port=${o.port}`,
+    // ---- browser-level egress containment (covers what request interception cannot see) ----
+    "--proxy-server=http://127.0.0.1:9", // dead proxy: any non-bypassed connection fails
+    // <-loopback> removes Chrome's implicit "all loopback bypasses the proxy" rule; only listed host:ports are direct.
+    `--proxy-bypass-list=<-loopback>;${(o.allowLoopbackPorts ?? [4100, 4200]).map((p) => `127.0.0.1:${p}`).join(";")}`,
+    "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
+    "--dns-prefetch-disable",
+    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+    "--webrtc-ip-handling-policy=disable_non_proxied_udp",
     "--no-first-run", "--no-default-browser-check",
     // minimise persistence + background traffic (does NOT make Chrome silent; see ARCHITECTURE.md)
     "--disable-background-networking", "--disable-sync", "--disable-component-update", "--disable-default-apps",

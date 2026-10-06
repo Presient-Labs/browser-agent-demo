@@ -126,6 +126,16 @@ const f=document.createElement("form");f.method="post";f.action="/records/SYN-10
       return send(200, layout("Client redirect fixture", `<h1>Results</h1><section data-agent-region="results" data-count="0"></section>
 <script>setTimeout(()=>location.assign("/login-challenge"), 700)</script>`));
     }
+    if (p === "/fixtures/egress") { // raw-network egress attempts that request interception cannot see
+      return send(200, layout("Egress fixture", `<link rel="preconnect" href="http://127.0.0.1:4102"><link rel="dns-prefetch" href="http://127.0.0.1:4102">
+<h1>Results</h1><section data-agent-region="results" data-count="0"></section>
+<script>try{const pc=new RTCPeerConnection({iceServers:[{urls:["stun:127.0.0.1:4102","turn:127.0.0.1:4102"],username:"u",credential:"c"}]});pc.createDataChannel("x");pc.createOffer().then(o=>pc.setLocalDescription(o))}catch(e){}</script>`));
+    }
+    if (p === "/fixtures/flip-auth") { // page flips to showing a credential field after the navigation settles
+      return send(200, layout("Flip fixture", `<h1>Claim record</h1>
+<section data-agent-region="record" data-record-id="SYN-1042"><dl><dt>balance</dt><dd data-field="balance" data-source="billing">1284.55</dd></dl></section>
+<script>setTimeout(()=>{const i=document.createElement("input");i.type="password";document.body.appendChild(i)}, 700)</script>`));
+    }
     if (p === "/fixtures/offsite-subresource") {
       return send(200, layout("Subresource fixture", `<h1>Subresource fixture</h1><section data-agent-region="results" data-count="0"></section>
 <img src="http://127.0.0.1:4101/pixel.png" alt="">`));
