@@ -2,6 +2,7 @@
   "name": "browser-agent-demo",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Independent portfolio demo: constrained browser agent over a synthetic records site. Synthetic data only.",
   "license": "MIT",
   "workspaces": [

@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "test": "vitest run --config vitest.config.ts && tsx ../scripts/leak-scan.ts",
-    "test:real": "vitest run --config vitest.config.ts real-provider"
+    "test:real": "vitest run --config vitest.real.config.ts"
   }
 }
