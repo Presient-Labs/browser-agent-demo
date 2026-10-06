@@ -57,7 +57,25 @@ export class BrowserBridge {
       const started = Date.now();
       const isFavicon = (() => { try { return new URL(url).pathname === "/favicon.ico"; } catch { return false; } })();
       try {
-        if (d.allow) return await route.continue();
+        if (d.allow) {
+          // Fetch WITHOUT following redirects so each redirect hop is policy-checked BEFORE any request is sent to it.
+          // (route.continue() lets Chromium follow redirects; a hop to an off-site host was observed to reach the destination.)
+          const resp = await route.fetch({ maxRedirects: 0 });
+          const st = resp.status();
+          const loc = resp.headers()["location"];
+          if (st >= 300 && st < 400 && loc) {
+            let next = "";
+            try { next = new URL(loc, url).toString(); } catch { /* malformed -> blocked below */ }
+            const rd = classifyRequest({ url: next, method: "GET", isNavigation: req.isNavigationRequest() }, this.siteOrigin);
+            if (!rd.allow) {
+              this.audit.record({ task_id: this.taskId, category: "navigate", outcome: "blocked", code: rd.code, started });
+              this.violation ??= { code: rd.code, category: rd.category };
+              log("redirect_blocked", { code: rd.code });
+              return await route.abort("blockedbyclient");
+            }
+          }
+          return await route.fulfill({ response: resp });
+        }
         this.audit.record({ task_id: this.taskId, category: d.category === "navigate" ? "navigate" : d.category === "popup" ? "popup" : "subresource", outcome: "blocked", code: d.code, started });
         if (!isFavicon) this.violation ??= { code: d.code, category: d.category };
         log("request_blocked", { code: d.code });
@@ -65,8 +83,9 @@ export class BrowserBridge {
       } catch { /* page/context already closed */ }
     });
     // Popups are never allowed: close immediately (their own requests are also routed/blocked).
+    let claimed = false; // the first page of this fresh context is our own task tab
     this.context.on("page", (p) => {
-      if (p === this.page) return;
+      if (!claimed) { claimed = true; return; }
       this.audit.record({ task_id: this.taskId, category: "popup", outcome: "blocked", code: "POPUP_NOT_ALLOWED" });
       this.violation ??= { code: "POPUP_NOT_ALLOWED", category: "popup" };
       p.close().catch(() => {});

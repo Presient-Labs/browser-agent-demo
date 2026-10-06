@@ -34,6 +34,7 @@ export function chromeArgs(o: LaunchOpts & { userDataDir: string }): string[] {
     "--no-pings", "--metrics-recording-only", "--password-store=basic", "--use-mock-keychain",
     "--disk-cache-size=1", "--media-cache-size=1", "--disable-features=Translate,OptimizationHints,MediaRouter,AutofillServerCommunication",
     "--disable-search-engine-choice-screen",
+    "--disable-popup-blocking", // so popup attempts reach (and are closed/audited by) our own policy
     "about:blank",
   ];
   if (o.extensionDir) a.unshift(`--load-extension=${o.extensionDir}`, `--disable-extensions-except=${o.extensionDir}`);
@@ -62,7 +63,7 @@ export async function launchDedicatedBrowser(o: LaunchOpts): Promise<DedicatedBr
     proc, port: o.port, cdpUrl, userDataDir, version,
     close: async () => {
       if (!exited) { proc.kill("SIGTERM"); await new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000); }); if (!exited) proc.kill("SIGKILL"); }
-      if (!o.userDataDir) await rm(userDataDir, { recursive: true, force: true });
+      if (!o.userDataDir) await rm(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
 }
