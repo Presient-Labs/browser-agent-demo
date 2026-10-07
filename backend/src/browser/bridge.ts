@@ -45,9 +45,8 @@ const COMBINED_SRC = `(function(arg){
   };
   var chainVisible = function(el){ for (var n = el; n && n.nodeType === 1; n = n.parentElement) { if (!ownVisible(n)) return false; } return true; };
   // visible text only: walk descendants, skipping any subtree whose element is not visibly rendered
-  var cutText = false;
   var collect = function(node, st){
-    if (st.len > caps.maxChars) return;
+    if (st.len > caps.maxChars) { st.cut = true; return; } // content remains but the cap stopped collection: a lossy cut
     if (node.nodeType === 3) { var t = String(node.data).replace(/\\s+/g, " "); st.out += t; st.len += t.length; return; }
     if (node.nodeType !== 1) return;
     if (st.top !== node && !ownVisible(node)) return;
@@ -70,10 +69,10 @@ const COMBINED_SRC = `(function(arg){
       if (src.length > caps.maxSource) { truncated = true; }
       src = src.slice(0, caps.maxSource);
       if (!/^[A-Za-z ]{0,40}$/.test(src)) src = "";
-      var st = { out: "", len: 0, top: el };
+      var st = { out: "", len: 0, top: el, cut: false };
       collect(el, st);
       var val = st.out.trim();
-      if (val.length > caps.maxChars) { truncated = true; val = val.slice(0, caps.maxChars); }
+      if (st.cut || val.length > caps.maxChars) { truncated = true; val = val.slice(0, caps.maxChars); }
       if (!take(name.length + src.length + val.length + 20)) break;
       fields.push({ field: name, source: src, value: val });
     }
@@ -155,7 +154,9 @@ export class BrowserBridge {
       throw e;
     }
     this.context = ctx;
+    const myCtx = ctx;
     await this.context.route("**/*", async (route) => {
+      if (this.context !== myCtx) { try { await route.abort("aborted"); } catch { /* closed */ } return; } // stale task: touch no shared state
       const req = route.request();
       const url = req.url();
       const d = classifyRequest({ url, method: req.method(), isNavigation: req.isNavigationRequest() }, this.siteOrigin);
@@ -214,7 +215,16 @@ export class BrowserBridge {
   get hasTab() { return !!this.context && !!this.page; }
   contextCount() { return this.browser?.contexts().length ?? 0; }
   /** Captures and clears THIS task's handles synchronously, then closes them: a slow close can never clear a newer task's state. */
-  async closeTaskTab() {
+  private pendingCloses = new Set<Promise<void>>();
+  /** Resolves when every close started so far (including abort-triggered ones) has finished. */
+  async settleCloses() { while (this.pendingCloses.size) await Promise.allSettled([...this.pendingCloses]); }
+  closeTaskTab(): Promise<void> {
+    const p = this.closeTaskTabInner();
+    this.pendingCloses.add(p);
+    void p.finally(() => this.pendingCloses.delete(p));
+    return p;
+  }
+  private async closeTaskTabInner() {
     const ctx = this.context;
     this.context = undefined; this.page = undefined; this.cdp = undefined;
     await this.testSeam?.beforeClose?.();

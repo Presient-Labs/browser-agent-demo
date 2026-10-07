@@ -24,7 +24,7 @@ SUITE mutation counter after all 10 tasks (expect 0): 0
 LEAK-SCAN OK: no synthetic leak markers in captured stdout/stderr or test-output/
 TEST EXIT: vitest=0 leak=0
 ```
-Per file (redacted test-output/results.json): backend-auth 18/18, e2e 25/25, extension 6/6, launcher 1/1, leak-network 6/6, leakwrap 1/1, no-temp-guards 1/1, panel-link 12/12, policy 37/37, providers 11/11, review-fixes 20/20, round2-browser 11/11, round2-extract 7/7, round2-lifecycle 4/4, round2-panel 2/2, security-review 4/4, suite 11/11, toctou-egress 6/6. Total 183/183, 0 skipped (after round 2).
+Per file (redacted test-output/results.json): backend-auth 18/18, e2e 25/25, extension 6/6, launcher 1/1, leak-network 6/6, leakwrap 1/1, no-temp-guards 1/1, panel-link 12/12, policy 37/37, providers 11/11, review-fixes 20/20, round2-browser 11/11, round2-extract 8/8, round2-lifecycle 5/5, round2-panel 2/2, security-review 4/4, suite 11/11, toctou-egress 6/6. Total 185/185, 0 skipped (after round 2).
 **Declared deterministic suite: 10/10** (tests/suite.test.ts: 3 success, not_found, conflicting->uncertain, non-conflicting field on the same record, prompt injection->blocked, login->human_action_required, write->blocked, off-site->blocked; site mutation counter 0 afterwards).
 
 ## Build-sheet acceptance rows -> tests
@@ -96,3 +96,10 @@ Note on `npm run test:real`: a git-ignored repo `.env` now exists that I did not
 
 ## Known limitations
 See ARCHITECTURE.md "Known limitations": heuristic visibility (same-colour / font-size:0 / off-screen text still read), same-user local access to the handoff file and CDP port, in-flight CDP commands abandoned rather than cancelled, flag-based egress containment, launcher SIGKILL leaves the profile dir. Video remains PENDING.
+
+## Final review (independent, of 50f01a3)
+Found: (1) N5 still open: whitespace padding split into many text nodes (HTML comments) made collection stop at the cap without setting `truncated`, so a model answering the prefix `Paid` verified as success; (2) N3 residual: the abort-triggered context close was fire-and-forget, so `active` could drop while the old context was still closing and a late route handler could touch shared state; (3) doc overclaims.
+Fixed, with red then green:
+- N5: round2-extract "padding split into many text nodes by comments..." red `status: DIFFERENT`, green after collection records a cut whenever the cap stops it. The "N5" row above is corrected: before this fix whitespace padding in a SINGLE text node was handled, comment-split padding was not.
+- N3: round2-lifecycle "Stop path..." red `contexts still open when run() returned: DIFFERENT`, green after `settleCloses()` awaits every in-flight close in the finally block and stale route handlers return without touching shared state. The N3 row is corrected accordingly (the earlier fix covered the normal path only).
+- Docs: ARCHITECTURE.md claims narrowed; Known limitations extended (non-rendered text nodes; nonce visible to any local user via /proc cmdline; unmet build-sheet item: no manual browser-launch fallback; connect phase not bounded by the wall-time budget).

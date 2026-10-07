@@ -315,6 +315,7 @@ export class TaskRunner {
     } finally {
       clearTimeout(timer);
       await this.bridge.closeTaskTab();
+      await this.bridge.settleCloses(); // also the abort-triggered close: `active` drops only after ALL cleanup
     }
   }
 
