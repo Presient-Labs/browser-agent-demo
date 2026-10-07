@@ -113,7 +113,7 @@ export class BrowserBridge {
   private cdp?: CDPSession;
   private redirectTarget?: string;
   /** TEST-ONLY seam (not reachable from the model, the API or the extension): runs page mutations at precise points. */
-  testSeam?: { beforeExtract?: (p: Page) => Promise<void>; afterExtract?: (p: Page) => Promise<void>; beforeGoto?: () => Promise<void>; afterPostCheck?: (p: Page) => Promise<void> };
+  testSeam?: { beforeExtract?: (p: Page) => Promise<void>; afterExtract?: (p: Page) => Promise<void>; beforeGoto?: () => Promise<void>; afterPostCheck?: (p: Page) => Promise<void>; beforeNewContext?: () => Promise<void>; beforeClose?: () => Promise<void> };
   constructor(private siteOrigin: string, private audit: AuditStore) {}
 
   /** Connect to the dedicated browser over loopback CDP only. */
@@ -134,11 +134,27 @@ export class BrowserBridge {
   get connected() { return !!this.browser?.isConnected(); }
 
   /** One fresh, isolated (non-persistent) context + ONE task tab per task. Nothing else is ever controlled. */
-  async openTaskTab(taskId: string) {
+  async openTaskTab(taskId: string, signal?: AbortSignal) {
     if (!this.browser) throw new Error("NOT_CONNECTED");
     this.taskId = taskId;
     this.violation = undefined;
-    this.context = await this.browser.newContext({ acceptDownloads: false, serviceWorkers: "block", viewport: { width: 1100, height: 760 } });
+    // Context creation is abortable: Playwright sends newContext with no timeout, so race it against the task signal and
+    // close the context if it resolves after the abort (no leaked contexts, no further setup).
+    const browser = this.browser;
+    const ctxP = (async () => { await this.testSeam?.beforeNewContext?.(); return browser.newContext({ acceptDownloads: false, serviceWorkers: "block", viewport: { width: 1100, height: 760 } }); })();
+    let ctx: BrowserContext;
+    try {
+      ctx = await new Promise<BrowserContext>((res, rej) => {
+        if (signal?.aborted) return rej(new Error("ABORTED"));
+        const on = () => rej(new Error("ABORTED"));
+        signal?.addEventListener("abort", on, { once: true });
+        ctxP.then((c) => { signal?.removeEventListener("abort", on); res(c); }, (e) => { signal?.removeEventListener("abort", on); rej(e); });
+      });
+    } catch (e) {
+      void ctxP.then((c) => c.close(), () => {}).catch(() => {});
+      throw e;
+    }
+    this.context = ctx;
     await this.context.route("**/*", async (route) => {
       const req = route.request();
       const url = req.url();
@@ -195,9 +211,14 @@ export class BrowserBridge {
     await this.page.goto("about:blank");
   }
 
+  get hasTab() { return !!this.context && !!this.page; }
+  contextCount() { return this.browser?.contexts().length ?? 0; }
+  /** Captures and clears THIS task's handles synchronously, then closes them: a slow close can never clear a newer task's state. */
   async closeTaskTab() {
-    try { await this.context?.close(); } catch { /* ignore */ }
+    const ctx = this.context;
     this.context = undefined; this.page = undefined; this.cdp = undefined;
+    await this.testSeam?.beforeClose?.();
+    try { await ctx?.close(); } catch { /* ignore */ }
   }
 
   takeViolation(): Violation | undefined { return this.violation; }

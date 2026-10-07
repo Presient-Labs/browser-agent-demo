@@ -73,8 +73,20 @@ export class TaskRunner {
   /** Stop: abort the task-wide signal; the listener below closes the task context so in-flight browser work dies at once. */
   stop() { this.aborted = true; this.abortCtl.abort(); }
 
+  private began = false;
+  /** Claims the runner synchronously (server calls this BEFORE awaiting the CDP connect) so an early Stop is not lost. */
+  begin() { this.active = true; this.aborted = false; this.abortCtl = new AbortController(); this.began = true; }
+  cancelBegin() { this.began = false; this.active = false; }
+
+  /** `active` turns false only AFTER all browser cleanup has finished. */
   async run(taskText: string, taskId = randomUUID()): Promise<TaskResult> {
-    this.active = true; this.aborted = false; this.abortCtl = new AbortController(); this.taskId = taskId;
+    try { return await this.runInner(taskText, taskId); } finally { this.active = false; }
+  }
+
+  private async runInner(taskText: string, taskId: string): Promise<TaskResult> {
+    if (!this.began) this.begin();
+    this.began = false;
+    this.taskId = taskId;
     const b = this.cfg.budgets;
     const t0 = Date.now();
     const parsed = parseTask(taskText);
@@ -120,7 +132,6 @@ export class TaskRunner {
         : r.status === "blocked" ? "blocked" : r.status === "human_action_required" ? "paused" : r.status === "stopped" ? "stopped" : "error";
       this.audit.record({ task_id: taskId, category: "task", outcome, code: r.code, started: t0 });
       log("task_end", { task: taskId.slice(0, 8), status: r.status, code: r.code });
-      this.active = false;
       return r;
     };
 
@@ -128,7 +139,7 @@ export class TaskRunner {
     if (!parsed.recordId || requested.length === 0 || taskText.length > 500) return finalize(result("error", "TASK_UNPARSEABLE"));
 
     try {
-      await this.bridge.openTaskTab(taskId);
+      await this.bridge.openTaskTab(taskId, signal);
       { const g = gate(); if (g) return finalize(g); }
       const msgs: Msg[] = [{ role: "user", text: taskText }];
 
@@ -298,6 +309,7 @@ export class TaskRunner {
       }
     } catch (e) {
       // Never log/propagate the raw error object (may contain content). Safe code only.
+      { const g = gate(); if (g) return finalize(g); } // a Stop/deadline that interrupted setup is reported as such
       log("task_internal_error", { name: e instanceof Error ? e.name : "unknown" });
       return finalize(result("error", "INTERNAL_ERROR"));
     } finally {

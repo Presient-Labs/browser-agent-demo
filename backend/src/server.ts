@@ -88,15 +88,15 @@ export function createBackend(o: BackendOpts) {
         if (url.pathname === "/api/tasks") {
           if (typeof parsed.task !== "string" || parsed.task.trim().length === 0 || parsed.task.length > 500) return reject(400, "BAD_REQUEST");
           if (runner.active) return reject(409, "TASK_ALREADY_RUNNING");
-          runner.active = true; // claim synchronously (before any await): no duplicate starts
+          runner.begin(); // claim synchronously (before any await): no duplicate starts, and an early Stop is preserved
           if (!o.bridge.connected) {
-            try { await o.bridge.connect(o.cdpUrl, await o.expectBrowser()); } catch { runner.active = false; return reject(503, "BROWSER_NOT_CONNECTED"); }
+            try { await o.bridge.connect(o.cdpUrl, await o.expectBrowser()); } catch { runner.cancelBegin(); return reject(503, "BROWSER_NOT_CONNECTED"); }
           }
           const task_id = randomUUID();
           broadcast({ type: "state", state: { ...status(), running: true }, task_id });
           void runner.run(parsed.task.trim(), task_id).then((r) => {
             lastResult = r; broadcast({ type: "result", result: r }); broadcast({ type: "state", state: status() });
-          }).catch(() => { log("task_crash"); runner.active = false; });
+          }).catch(() => { log("task_crash"); });
           return json(202, { task_id });
         }
         if (url.pathname === "/api/tasks/stop") { runner.stop(); return json(200, { stopping: runner.active }); }
