@@ -152,7 +152,7 @@ describe("finding 8: backend refuses a browser it did not launch", () => {
     try {
       for (let i = 0; i < 60; i++) { try { await fetch("http://127.0.0.1:9555/json/version"); break; } catch { await sleep(200); } }
       const bridge = new BrowserBridge(s.cfg.siteOrigin, new AuditStore());
-      await expect(bridge.connect("http://127.0.0.1:9555")).rejects.toThrow("BROWSER_NOT_DEDICATED");
+      await expect(bridge.connect("http://127.0.0.1:9555", { nonce: "x", userDataDir: dir, allowPorts: [4100, 4200] })).rejects.toThrow("BROWSER_NOT_DEDICATED");
       expect(bridge.connected).toBe(false);
     } finally { proc.kill("SIGKILL"); await sleep(500); }
   });

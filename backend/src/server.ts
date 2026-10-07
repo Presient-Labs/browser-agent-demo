@@ -20,6 +20,8 @@ export interface BackendOpts {
   bridge: BrowserBridge;
   secret: string;
   cdpUrl: string;
+  /** Resolves the launch-bound expectation (nonce + profile dir from the launcher handoff). Rejects => not connected. */
+  expectBrowser: () => Promise<import("./browser/launch.js").DedicatedExpect>;
   allowedOrigins: string[]; // exact extension origins, e.g. chrome-extension://<id>
 }
 
@@ -88,7 +90,7 @@ export function createBackend(o: BackendOpts) {
           if (runner.active) return reject(409, "TASK_ALREADY_RUNNING");
           runner.active = true; // claim synchronously (before any await): no duplicate starts
           if (!o.bridge.connected) {
-            try { await o.bridge.connect(o.cdpUrl); } catch { runner.active = false; return reject(503, "BROWSER_NOT_CONNECTED"); }
+            try { await o.bridge.connect(o.cdpUrl, await o.expectBrowser()); } catch { runner.active = false; return reject(503, "BROWSER_NOT_CONNECTED"); }
           }
           const task_id = randomUUID();
           broadcast({ type: "state", state: { ...status(), running: true }, task_id });

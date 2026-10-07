@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from "playwright";
-import { verifyDedicatedArgs } from "./launch.js";
+import { verifyDedicatedArgs, type DedicatedExpect } from "./launch.js";
 import { classifyRequest, checkUrl, type Decision, type PolicyCode } from "../policy/url.js";
 import type { AuditStore } from "../audit.js";
 import { log } from "../logger.js";
@@ -117,7 +117,7 @@ export class BrowserBridge {
   constructor(private siteOrigin: string, private audit: AuditStore) {}
 
   /** Connect to the dedicated browser over loopback CDP only. */
-  async connect(cdpUrl: string) {
+  async connect(cdpUrl: string, expect: DedicatedExpect) {
     const u = new URL(cdpUrl);
     if (u.hostname !== "127.0.0.1") throw new Error("CDP_NOT_LOOPBACK");
     const browser = await chromium.connectOverCDP(cdpUrl);
@@ -126,7 +126,7 @@ export class BrowserBridge {
     try {
       const sess = await browser.newBrowserCDPSession();
       const { arguments: args } = (await sess.send("Browser.getBrowserCommandLine" as any)) as { arguments: string[] };
-      ok = verifyDedicatedArgs(args);
+      ok = verifyDedicatedArgs(args, expect);
     } catch { ok = false; }
     if (!ok) { try { await browser.close(); } catch { /* disconnect */ } throw new Error("BROWSER_NOT_DEDICATED"); }
     this.browser = browser;

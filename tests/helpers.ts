@@ -57,7 +57,7 @@ export async function startStack(cfgOverride: Record<string, string> = {}, brows
   const progress: string[] = [];
   setLogSink((l) => logs.push(l));
   const bridge = new BrowserBridge(cfg.siteOrigin, audit);
-  await bridge.connect(browser.cdpUrl);
+  await bridge.connect(browser.cdpUrl, { nonce: browser.nonce, userDataDir: browser.userDataDir, allowPorts: browser.allowPorts });
   const stack: Stack = {
     site, evil, browser, bridge, audit, cfg, logs, progress,
     runner: (p) => new TaskRunner(cfg, p, bridge, audit, (e) => progress.push(e.text)),

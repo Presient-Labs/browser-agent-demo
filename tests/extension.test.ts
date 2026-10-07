@@ -23,7 +23,7 @@ d("extension side panel (headed Chromium under Xvfb, extension LOADED via --load
     execSync("npm run build -w extension", { cwd: new URL("..", import.meta.url).pathname, stdio: "ignore" });
     extId = extensionIdFromManifest(JSON.parse(readFileSync(EXT_DIR + "/manifest.json", "utf8")));
     s = await startStack({ BACKEND_PORT: "4200" }, { headed: true, extensionDir: EXT_DIR });
-    be = createBackend({ cfg: s.cfg, provider: new FakeProvider("happy"), audit: s.audit, bridge: s.bridge, secret: SECRET, cdpUrl: s.browser.cdpUrl, allowedOrigins: [`chrome-extension://${extId}`] });
+    be = createBackend({ cfg: s.cfg, provider: new FakeProvider("happy"), audit: s.audit, bridge: s.bridge, secret: SECRET, cdpUrl: s.browser.cdpUrl, expectBrowser: async () => ({ nonce: s.browser.nonce, userDataDir: s.browser.userDataDir, allowPorts: s.browser.allowPorts }), allowedOrigins: [`chrome-extension://${extId}`] });
     await be.listen();
     br = await chromium.connectOverCDP(s.browser.cdpUrl);
     panel = (br.contexts()[0].pages()[0]) ?? (await br.contexts()[0].newPage());

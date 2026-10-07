@@ -8,6 +8,7 @@ import { resolveProviderAudited } from "./bootstrap.js";
 import { FakeProvider, type FakeScript } from "./providers/fake.js";
 import { extensionIdFromManifest } from "./extension-id.js";
 import { log } from "./logger.js";
+import { readHandoff } from "./browser/launch.js";
 
 try { process.loadEnvFile(new URL("../../.env", import.meta.url).pathname); } catch { /* no .env: fine */ }
 const cfg = loadConfig();
@@ -22,6 +23,7 @@ const bridge = new BrowserBridge(cfg.siteOrigin, audit);
 const backend = createBackend({
   cfg, provider, audit, bridge, secret,
   cdpUrl: `http://127.0.0.1:${cfg.cdpPort}`,
+  expectBrowser: () => readHandoff(cfg.cdpPort, [Number(new URL(cfg.siteOrigin).port), cfg.backendPort]),
   allowedOrigins: [`chrome-extension://${extId}`],
 });
 const port = await backend.listen();

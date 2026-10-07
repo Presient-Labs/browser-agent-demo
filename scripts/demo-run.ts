@@ -45,7 +45,7 @@ const bridge = new BrowserBridge(cfg.siteOrigin, audit);
 const provider = useReal ? resolveProviderAudited(cfg, audit) : new DemoFake();
 const secret = randomBytes(18).toString("base64url");
 const extId = extensionIdFromManifest(JSON.parse(readFileSync(cfg.extensionDir + "/manifest.json", "utf8")));
-const backend = createBackend({ cfg, provider, audit, bridge, secret, cdpUrl: browser.cdpUrl, allowedOrigins: [`chrome-extension://${extId}`] });
+const backend = createBackend({ cfg, provider, audit, bridge, secret, cdpUrl: browser.cdpUrl, expectBrowser: async () => ({ nonce: browser.nonce, userDataDir: browser.userDataDir, allowPorts: browser.allowPorts }), allowedOrigins: [`chrome-extension://${extId}`] });
 await backend.listen();
 console.log(`[demo] mode=${provider.mode} provider=${provider.id} model=${provider.model}  browser=${browser.version}`);
 

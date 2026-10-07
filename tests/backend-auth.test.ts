@@ -15,7 +15,7 @@ const BAD_ORIGINS = ["https://evil.example", "http://127.0.0.1:4101", "chrome-ex
 let s: Stack; let be: ReturnType<typeof createBackend>; let port = 0;
 beforeAll(async () => {
   s = await startStack({ BACKEND_PORT: "4200" });
-  be = createBackend({ cfg: s.cfg, provider: new FakeProvider("happy"), audit: s.audit, bridge: s.bridge, secret: SECRET, cdpUrl: s.browser.cdpUrl, allowedOrigins: [EXT] });
+  be = createBackend({ cfg: s.cfg, provider: new FakeProvider("happy"), audit: s.audit, bridge: s.bridge, secret: SECRET, cdpUrl: s.browser.cdpUrl, expectBrowser: async () => ({ nonce: s.browser.nonce, userDataDir: s.browser.userDataDir, allowPorts: s.browser.allowPorts }), allowedOrigins: [EXT] });
   port = await be.listen();
 });
 afterAll(async () => { await be?.close(); await s?.close(); });
