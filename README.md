@@ -28,7 +28,7 @@ npm run start:backend
 ```
 Start the backend AFTER the browser (it reads the launcher handoff file). Open the panel: the toolbar button opens the side panel in a normal desktop session; on a headless VPS the panel page is `chrome-extension://<id>/sidepanel.html` (the id is derived from the manifest key; the backend allows only that origin). Paste the secret, press Connect, enter a task, Run. There is deliberately **no manual-launch fallback**: the backend refuses any browser that is not the one `npm run browser` spawned (it verifies the browser's real command line against a per-launch nonce, the exact profile directory and the full egress/background flag set, handed over through a 0600 file in the temp dir). If `npm run browser` fails, fix the launcher (see its error code) rather than starting Chromium by hand.
 
-One scripted run of all demo beats (for recording): `bash scripts/demo-run.sh` (`DEMO_PROVIDER=anthropic` for a real model, `DEMO_PAUSE=ms`, `DEMO_HOLD=1`).
+Record the demo video (own Xvfb + ffmpeg, writes media/demo-<fake|real>-<date>.mp4): `DEMO_PROVIDER=anthropic bash scripts/record-demo.sh` (omit the variable for FAKE mode). One scripted run without recording: `bash scripts/demo-run.sh` (`DEMO_PROVIDER=anthropic` for a real model, `DEMO_PAUSE=ms`, `DEMO_HOLD=1`).
 
 ## Configuration (`.env`, backend only)
 See `.env.example`. `PROVIDER` is `fake` (deterministic, UI shows **MODE: FAKE**), `anthropic` (real, **MODE: REAL**, default approved model `claude-sonnet-5-5`), or `openai` (**stub, not implemented**). `APPROVED_MODELS` is the explicit allow list; endpoints are fixed in code and cannot be configured. Budgets and cost-estimate rates are env-configurable.

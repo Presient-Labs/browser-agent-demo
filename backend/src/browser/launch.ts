@@ -13,6 +13,8 @@ export interface LaunchOpts {
   noSandbox?: boolean;
   /** Loopback ports Chrome may reach directly (synthetic site + backend). Everything else goes to a dead proxy. */
   allowLoopbackPorts?: number[];
+  /** Extra Chrome flags. Used ONLY by the demo recorder (--test-type hides infobars); no containment flag is ever removed. */
+  extraArgs?: string[];
 }
 export interface DedicatedBrowser {
   proc: ChildProcess;
@@ -86,6 +88,7 @@ export function chromeArgs(o: LaunchOpts & { userDataDir: string; nonce?: string
     "about:blank",
   ];
   if (o.extensionDir) a.unshift(`--load-extension=${o.extensionDir}`, `--disable-extensions-except=${o.extensionDir}`);
+  if (o.extraArgs) a.unshift(...o.extraArgs);
   if (o.headless) a.unshift("--headless=new");
   if (o.noSandbox) a.unshift("--no-sandbox");
   return a;

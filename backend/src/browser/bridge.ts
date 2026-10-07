@@ -135,6 +135,7 @@ export class BrowserBridge {
   /** One fresh, isolated (non-persistent) context + ONE task tab per task. Nothing else is ever controlled. */
   async openTaskTab(taskId: string, signal?: AbortSignal) {
     if (!this.browser) throw new Error("NOT_CONNECTED");
+    if (this.keepTabOpenForDemo) await this.closeTaskTab(true);
     this.taskId = taskId;
     this.violation = undefined;
     // Context creation is abortable: Playwright sends newContext with no timeout, so race it against the task signal and
@@ -215,10 +216,13 @@ export class BrowserBridge {
   get hasTab() { return !!this.context && !!this.page; }
   contextCount() { return this.browser?.contexts().length ?? 0; }
   /** Captures and clears THIS task's handles synchronously, then closes them: a slow close can never clear a newer task's state. */
+  /** DEMO-ONLY (set by scripts/demo-run.ts, never by the API/model/tests): keep the last task tab on screen until the next task starts. */
+  keepTabOpenForDemo = false;
   private pendingCloses = new Set<Promise<void>>();
   /** Resolves when every close started so far (including abort-triggered ones) has finished. */
   async settleCloses() { while (this.pendingCloses.size) await Promise.allSettled([...this.pendingCloses]); }
-  closeTaskTab(): Promise<void> {
+  closeTaskTab(force = false): Promise<void> {
+    if (this.keepTabOpenForDemo && !force) return Promise.resolve();
     const p = this.closeTaskTabInner();
     this.pendingCloses.add(p);
     void p.finally(() => this.pendingCloses.delete(p));
@@ -359,6 +363,6 @@ export class BrowserBridge {
     const r = await this.extract("results", maxBytes);
     return r.kind === "ok" ? { kind: "ok" as const, data: r.data as ResultsData | null, truncated: r.truncated, bytes: r.bytes, href: r.href } : r;
   }
-  async close() { await this.closeTaskTab(); try { await this.browser?.close(); } catch { /* ignore */ } }
+  async close() { await this.closeTaskTab(true); try { await this.browser?.close(); } catch { /* ignore */ } }
   async disconnect() { await this.closeTaskTab(); this.browser = undefined; }
 }
