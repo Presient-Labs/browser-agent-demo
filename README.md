@@ -26,7 +26,7 @@ npm run browser
 # 3. backend: prints MODE and a one-time SESSION SECRET
 npm run start:backend
 ```
-Open the panel: the toolbar button opens the side panel in a normal desktop session; on a headless VPS the panel page is `chrome-extension://<id>/sidepanel.html` (the id is derived from the manifest key; the backend allows only that origin). Paste the secret, press Connect, enter a task, Run. Manual fallback if the launcher fails: start Chromium yourself with a fresh `--user-data-dir`, `--remote-debugging-address=127.0.0.1 --remote-debugging-port=9333 --load-extension=<repo>/extension/dist` plus the egress flags in `backend/src/browser/launch.ts`.
+Start the backend AFTER the browser (it reads the launcher handoff file). Open the panel: the toolbar button opens the side panel in a normal desktop session; on a headless VPS the panel page is `chrome-extension://<id>/sidepanel.html` (the id is derived from the manifest key; the backend allows only that origin). Paste the secret, press Connect, enter a task, Run. There is deliberately **no manual-launch fallback**: the backend refuses any browser that is not the one `npm run browser` spawned (it verifies the browser's real command line against a per-launch nonce, the exact profile directory and the full egress/background flag set, handed over through a 0600 file in the temp dir). If `npm run browser` fails, fix the launcher (see its error code) rather than starting Chromium by hand.
 
 One scripted run of all demo beats (for recording): `bash scripts/demo-run.sh` (`DEMO_PROVIDER=anthropic` for a real model, `DEMO_PAUSE=ms`, `DEMO_HOLD=1`).
 
