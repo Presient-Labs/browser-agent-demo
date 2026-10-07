@@ -2,6 +2,10 @@
 
 Independent portfolio demo of a **constrained, read-only browser agent** over a **synthetic** records website, with a Chrome MV3 side-panel UI. All data is fake and labelled "SYNTHETIC — NOT REAL PATIENT DATA". This is not a client deployment and makes no HIPAA-compliance claim. Spec: `docs/BUILD_SHEET.md`. Status and evidence: `ACCEPTANCE_REPORT.md`. Design and gaps: `ARCHITECTURE.md`.
 
+**Demo video (2 min 30 s, real model `claude-sonnet-5-5`):** [download / watch](https://github.com/Presient-Labs/browser-agent-demo/releases/download/v0.1.0/browser-agent-demo.mp4). It shows a structured result with source URL and UTC time, a blocked write (site mutation counter stays 0), a blocked off-allowlist navigation, a sign-in pause, and the metadata-only audit log. In beats 2 and 3 the real model refused the forbidden action, so one scripted tool call is substituted to show the policy blocking it; those beats are labelled on screen.
+
+**At a glance:** 185 automated tests (redirect chains, isolated-world extraction, WebSocket/WebRTC egress, prompt-injection, leak markers, Stop/deadline races). Two rounds of independent adversarial code review plus a final verification pass, each finding fixed with a red→green regression test (see `ACCEPTANCE_REPORT.md`). Real-provider run: success, ~$0.02 per task (estimate).
+
 ## Tested setup (what was actually run)
 - OS: Ubuntu (Linux 6.8) VPS, no display; headed Chromium runs under Xvfb. Node v22.22.1, npm 10.9.4.
 - Browser: **Playwright's bundled Chromium (Chrome for Testing) 153.0.8010.12**, Playwright 1.63.0.
