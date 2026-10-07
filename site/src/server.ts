@@ -191,6 +191,10 @@ Element.prototype.querySelectorAll=function(s){return hide(s)?[]:eqa.call(this,s
       return send(200, layout("N5 spaces", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>
 <dd data-field="claim_status" data-source="billing">Paid${" ".repeat(500)}(reversed; denied)</dd></dl></section>`));
     }
+    if (p === "/fixtures/n5-comments") { // comments split the padding into hundreds of text nodes
+      return send(200, layout("N5 comments", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>
+<dd data-field="claim_status" data-source="billing">Paid${" <!---->".repeat(397)}(reversed; denied)</dd></dl></section>`));
+    }
     if (p === "/fixtures/n5-long") {
       return send(200, layout("N5 long", `<section data-agent-region="record" data-record-id="SYN-1042"><dl>
 <dd data-field="payer" data-source="billing">${"A".repeat(600)}</dd></dl></section>`));

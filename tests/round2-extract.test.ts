@@ -43,6 +43,10 @@ describe("N5: lossy extraction is never verified as success", () => {
     const r = await s.run("Find SYN-1042 and report its claim status.", new ScriptedProvider([nav("/fixtures/n5-spaces"), insp, { name: "finish", input: { status: "found", record_id: "SYN-1042", fields: { claim_status: "Paid" } } }]));
     expectEq("status", r.status, "uncertain");
   });
+  it("padding split into many text nodes by comments cannot drop the qualifier: prefix answer is not success", async () => {
+    const r = await s.run("Find SYN-1042 and report its claim status.", new ScriptedProvider([nav("/fixtures/n5-comments"), insp, { name: "finish", input: { status: "found", record_id: "SYN-1042", fields: { claim_status: "Paid" } } }]));
+    expectEq("status", r.status, "uncertain");
+  });
   it("a value longer than the per-field cap is truncated => uncertain even if the model repeats the kept prefix", async () => {
     const r = await s.run("Find SYN-1042 and report its payer.", new ScriptedProvider([nav("/fixtures/n5-long"), insp, { name: "finish", input: { status: "found", record_id: "SYN-1042", fields: { payer: "A".repeat(400) } } }]));
     expectEq("status", r.status, "uncertain");

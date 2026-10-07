@@ -19,7 +19,7 @@ const READ_ROUTES: RegExp[] = [
   /^\/login-challenge$/,
   /^\/redirect-offsite$/, // fixtures used to prove redirect checks
   /^\/redirect-onsite$/,
-  /^\/fixtures\/(popup|auto-write|offsite-subresource|websocket|iframe-login|pushstate|client-redirect|egress|flip-auth|chain-bad-[12]|chain-ok-[12]|loop|chain-offsite-[12]|hostile-auth|hidden-field|huge|n1-hidden-desc|n1-shadow-open|n1-shadow-closed|n5-spaces|n5-long|huge-results)$/,
+  /^\/fixtures\/(popup|auto-write|offsite-subresource|websocket|iframe-login|pushstate|client-redirect|egress|flip-auth|chain-bad-[12]|chain-ok-[12]|loop|chain-offsite-[12]|hostile-auth|hidden-field|huge|n1-hidden-desc|n1-shadow-open|n1-shadow-closed|n5-spaces|n5-comments|n5-long|huge-results)$/,
 ];
 const WRITE_ROUTE = /\/(update|submit|delete|save|send)(\/|$)|^\/api\/|^\/login-challenge\/submit$/;
 

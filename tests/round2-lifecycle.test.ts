@@ -78,6 +78,21 @@ describe("N3c: cleanup completes before the task is 'inactive'; an old close can
     expectEq("active during cleanup", activeDuringCleanup, true);
     expectEq("active after", runner.active, false);
   });
+  it("Stop path: run() does not return (active stays true) until the abort-triggered context close has finished", async () => {
+    const baseline = s.bridge.contextCount();
+    let n = 0;
+    s.bridge.testSeam = { beforeClose: async () => { if (n++ === 0) await sleep(900); } };
+    const slow = new ScriptedProvider([{ name: "navigate", input: { url: `${SITE}/` } }], async () => { await sleep(1500); });
+    const runner = new TaskRunner(s.cfg, slow, s.bridge, s.audit);
+    const p = runner.run(TASK);
+    await sleep(400);
+    runner.stop();
+    await p;
+    const leftover = s.bridge.contextCount();
+    s.bridge.testSeam = undefined;
+    await sleep(1200);
+    expectEq("contexts still open when run() returned", leftover, baseline);
+  });
   it("a slow closeTaskTab of task A does not wipe task B's context/page", async () => {
     await s.bridge.openTaskTab("A");
     let n = 0;
