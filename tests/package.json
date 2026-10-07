@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "test": "tsx ../scripts/run-tests.ts",
-    "test:real": "vitest run --config vitest.real.config.ts"
+    "test:real": "tsx ../scripts/run-tests.ts --real"
   }
 }

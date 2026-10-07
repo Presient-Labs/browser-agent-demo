@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startStack, siteCounter, ScriptedProvider, RecordingProvider, SITE, EVIL, type Stack } from "./helpers.js";
-import { expectHas, expectLacks } from "./leak.js";
+import { expectHas, expectLacks, expectEq } from "./leak.js";
 import { FakeProvider } from "../backend/src/providers/fake.js";
 import type { TaskResult } from "../backend/src/coordinator.js";
 
@@ -16,7 +16,7 @@ describe("1 happy path (real browser, fake model)", () => {
     const r = await s.run("Find synthetic record SYN-1042 and report its claim status and balance.");
     expect(r.status).toBe("success");
     expect(r.record_id).toBe("SYN-1042");
-    expect(r.fields).toEqual({ claim_status: "Pending - Payer Review", balance: "1284.55" });
+    expectEq("fields", r.fields, { claim_status: "Pending - Payer Review", balance: "1284.55" });
     expect(r.source_url).toBe(`${SITE}/records/SYN-1042`);
     expect(r.retrieved_at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
     expect(Date.parse(r.retrieved_at!)).toBeGreaterThanOrEqual(before);
@@ -41,7 +41,7 @@ describe("2 unknown record", () => {
   it("returns not_found with no invented fields", async () => {
     const r = await s.run("Find SYN-9999 and report its balance.");
     expect(r.status).toBe("not_found");
-    expect(r.fields).toEqual({});
+    expectEq("fields", r.fields, {});
     expect(r.source_url).toContain("/search?q=SYN-9999");
   });
   it("a model that claims not_found WITHOUT searching is not believed", async () => {
@@ -56,18 +56,18 @@ describe("3 ambiguous / conflicting evidence", () => {
     const r = await s.run("Find SYN-2077 and report its claim status.");
     expect(r.status).toBe("uncertain");
     expect(r.code).toBe("CONFLICTING_EVIDENCE");
-    expect(r.fields).toEqual({});
+    expectEq("fields", r.fields, {});
   });
   it("non-conflicting field on the same record is still reported", async () => {
     const r = await s.run("Find SYN-2077 and report its payer.");
     expect(r.status).toBe("success");
-    expect(r.fields.payer).toBe("Cedar Health Plan (synthetic)");
+    expectEq("payer", r.fields.payer, "Cedar Health Plan (synthetic)");
   });
   it("hallucinated value is rejected against evidence", async () => {
     const r = await s.run("Find SYN-1042 and report its balance.", "hallucinate");
     expect(r.status).toBe("uncertain");
     expect(r.code).toBe("EVIDENCE_MISMATCH");
-    expect(r.fields).toEqual({});
+    expectEq("fields", r.fields, {});
   });
 });
 
@@ -155,7 +155,7 @@ describe("7 credential fixture", () => {
     const rec = new RecordingProvider(new FakeProvider("login"));
     const r = await s.run("Find SYN-1042 and report its balance.", rec);
     expect(r.status).toBe("human_action_required");
-    expect(r.fields).toEqual({});
+    expectEq("fields", r.fields, {});
     const sent = rec.sent.join("\n");
     for (const forbidden of ["AUTHSECRET", "password", "one-time-code", "csrf", "Session expired"]) expectLacks("model-visible text", sent, forbidden);
     expect(events(r).some((e) => e.outcome === "paused" && e.code === "AUTH_REQUIRED")).toBe(true);

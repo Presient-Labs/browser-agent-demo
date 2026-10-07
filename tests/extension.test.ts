@@ -57,7 +57,7 @@ d("extension side panel (headed Chromium under Xvfb, extension LOADED via --load
     const card = await panel.locator("#result-body").innerText();
     expectHas("card balance", card, "1284.55"); expectHas("card status", card, "Pending - Payer Review");
     expectHas("card source", card, "http://127.0.0.1:4100/records/SYN-1042");
-    expect(card).toMatch(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z/);
+    expect(`timestamp present: ${/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z/.test(card)}`).toBe("timestamp present: true");
     expectHas("card estimate", card, "estimate");
     await panel.locator("#audit summary").click();
     const audit = await panel.locator("#audit-rows").innerText();

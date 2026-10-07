@@ -1,15 +1,31 @@
-// Runs vitest with ALL of its stdout/stderr captured, then scans that capture AND test-output/ for synthetic leak markers.
-// The scan runs whether vitest passed or failed. On a leak only marker IDs are printed (captured output is NOT echoed).
+// Runs vitest with ALL of its stdout/stderr captured, then scans that capture AND the JSON report for synthetic leak markers.
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { scanDir, scanText } from "../tests/leak.js";
 
 const root = new URL("..", import.meta.url).pathname;
-mkdirSync(root + "test-output", { recursive: true });
-const r = spawnSync(root + "node_modules/.bin/vitest", ["run", "--config", "tests/vitest.config.ts", ...process.argv.slice(2)], { cwd: root, encoding: "utf8", maxBuffer: 512 * 1024 * 1024, env: process.env });
+const outDir = process.env.OUT_DIR ?? root + "test-output";
+mkdirSync(outDir, { recursive: true });
+const config = process.env.RUN_CONFIG ?? "tests/vitest.config.ts";
+const REAL = process.argv.includes("--real");
+const reportName = REAL ? "real-results.json" : "results.json";
+// vitest writes its raw JSON report to a PRIVATE temp dir; only a redacted copy is ever placed in the output dir.
+const priv = mkdtempSync(join(tmpdir(), "vitest-raw-"));
+const r = spawnSync(root + "node_modules/.bin/vitest", ["run", "--config", REAL ? "tests/vitest.real.config.ts" : config, `--outputFile.json=${priv}/${reportName}`, ...process.argv.slice(2).filter((a) => a !== "--real")], { cwd: root, encoding: "utf8", maxBuffer: 512 * 1024 * 1024, env: process.env });
+const redactDeep = (v: any): any => {
+  if (typeof v === "string") { const ids = scanText(v); return ids.length ? `[REDACTED content-bearing text; marker ids ${ids.join(",")}]` : v; }
+  if (Array.isArray(v)) return v.map(redactDeep);
+  if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, redactDeep(x)]));
+  return v;
+};
+const rawPath = `${priv}/${reportName}`;
+if (existsSync(rawPath)) { try { writeFileSync(`${outDir}/${reportName}`, JSON.stringify(redactDeep(JSON.parse(readFileSync(rawPath, "utf8"))))); } catch { /* unreadable report: nothing persisted */ } }
+rmSync(priv, { recursive: true, force: true });
 const captured = `${r.stdout ?? ""}\n${r.stderr ?? ""}`;
 const streamIds = scanText(captured);
-const fileHits = scanDir(root + "test-output");
+const fileHits = scanDir(outDir);
 let leaked = false;
 if (streamIds.length) { leaked = true; console.error(`LEAK-SCAN FAIL: captured vitest stdout/stderr contains synthetic markers ids=${streamIds.join(",")} (output withheld)`); }
 if (fileHits.length) { leaked = true; console.error("LEAK-SCAN FAIL: persisted test-output files contain synthetic markers:"); for (const h of fileHits) console.error(`  ${h.file}: ${h.ids.join(",")}`); }

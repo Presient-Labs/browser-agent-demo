@@ -6,7 +6,7 @@ import { startStack, type Stack } from "./helpers.js";
 import { createBackend } from "../backend/src/server.js";
 import { FakeProvider } from "../backend/src/providers/fake.js";
 import { extensionIdFromManifest } from "../backend/src/extension-id.js";
-import { expectNoMarkers } from "./leak.js";
+import { expectNoMarkers, expectEq } from "./leak.js";
 
 const SECRET = "test-secret-0123456789";
 const EXT = `chrome-extension://${extensionIdFromManifest(JSON.parse(readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8")))}`;
@@ -110,7 +110,7 @@ describe("12 backend authentication / origin", () => {
     for (let i = 0; i < 100 && !frames.some((f) => f.type === "result"); i++) await new Promise((r) => setTimeout(r, 100));
     const result = frames.find((f) => f.type === "result")?.result;
     expect(result?.status).toBe("success");
-    expect(result.fields.balance).toBe("1284.55");
+    expectEq("balance", result.fields.balance, "1284.55");
     const nonResult = JSON.stringify(frames.filter((f) => f.type !== "result"));
     expectNoMarkers("ws frames", nonResult);
     ws.close();

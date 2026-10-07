@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { chromium } from "playwright";
 import { startStack, siteCounter, ScriptedProvider, RecordingProvider, SITE, type Stack } from "./helpers.js";
-import { expectNoMarkers } from "./leak.js";
+import { expectNoMarkers, expectEq } from "./leak.js";
 import { TaskRunner } from "../backend/src/coordinator.js";
 import { BrowserBridge } from "../backend/src/browser/bridge.js";
 import { AuditStore } from "../backend/src/audit.js";
@@ -62,7 +62,7 @@ describe("finding 2: hostile page JS cannot defeat auth detection or widen extra
     const r = await s.run(TASK, rec);
     expect(rec.sent.join("\n").includes("AUTHSECRET")).toBe(false);
     expect(r.status).toBe("success");
-    expect(r.fields.balance).toBe("1284.55");
+    expectEq("balance", r.fields.balance, "1284.55");
   });
 });
 
