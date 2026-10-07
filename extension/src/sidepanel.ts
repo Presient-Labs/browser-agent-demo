@@ -1,11 +1,15 @@
 // Side panel UI. State lives in memory only: no chrome.storage, localStorage or cookies are used.
 const BACKEND = "http://127.0.0.1:4200";
 const WS_URL = "ws://127.0.0.1:4200/ws";
+import { safeSourceLink } from "./links.js";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 let secret = "";
 let ws: WebSocket | undefined;
 let running = false;
+let connected = false;
+let allowedSite = "";
+let closingIntentionally = false;
 
 function setState(s: string) {
   const el = $("state"); el.textContent = s.replace(/_/g, " "); el.className = `state ${s}`;
@@ -43,8 +47,9 @@ function showResult(r: any) {
   add("record_id", r.record_id ?? "—");
   for (const f of r.requested_fields) add(f, r.fields?.[f] ?? "(not reported)");
   if (r.source_url) {
-    const a = document.createElement("a"); a.href = r.source_url; a.textContent = r.source_url; a.target = "_blank"; a.rel = "noreferrer noopener";
-    add("source_url", a);
+    const safe = safeSourceLink(r.source_url, allowedSite);
+    if (safe) { const a = document.createElement("a"); a.href = safe; a.textContent = safe; a.target = "_blank"; a.rel = "noreferrer noopener"; add("source_url", a); }
+    else add("source_url", `${r.source_url} (not a read route: shown as text, not linked)`);
   } else add("source_url", "—");
   if (r.retrieved_at) {
     const d = new Date(r.retrieved_at);
@@ -61,7 +66,15 @@ function showResult(r: any) {
   body.appendChild(c);
 }
 
+function setDisconnected() {
+  connected = false;
+  setRunning(false);
+  setState("disconnected");
+  $("conn-msg").textContent = "Disconnected from the backend. Next: restart the backend (npm run start:backend), then paste the new session secret and Connect again.";
+}
+
 function applyState(s: any) {
+  allowedSite = s.allowed_site ?? allowedSite;
   const b = $("mode-badge");
   b.textContent = `MODE: ${s.mode} · ${s.provider} · ${s.model}`;
   b.className = `badge ${s.mode === "FAKE" ? "fake" : "real"}`;
@@ -76,29 +89,35 @@ function connect() {
   secret = ($("secret") as HTMLInputElement).value.trim();
   ($("secret") as HTMLInputElement).value = "";
   if (!secret) return;
-  ws?.close();
-  ws = new WebSocket(WS_URL);
+  closingIntentionally = true; ws?.close(); closingIntentionally = false;
+  const mine = (ws = new WebSocket(WS_URL));
   ws.onopen = () => ws!.send(JSON.stringify({ type: "auth", secret }));
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
     if (m.type === "state") {
-      $("conn-msg").textContent = "Connected."; $("task").hidden = false; $("audit").hidden = false;
+      connected = true; $("conn-msg").textContent = "Connected."; $("task").hidden = false; $("audit").hidden = false;
       applyState(m.state);
     } else if (m.type === "progress") addProgress(m.text);
     else if (m.type === "result") showResult(m.result);
     else if (m.type === "audit") addAudit(m.event);
     else if (m.type === "audit_backlog") m.events.forEach(addAudit);
   };
-  ws.onclose = () => { if ($("task").hidden) $("conn-msg").textContent = "Connection refused. Check the secret and that the backend is running."; };
+  ws.onclose = () => {
+    if (closingIntentionally || ws !== mine) return;
+    if ($("task").hidden) $("conn-msg").textContent = "Connection refused. Check the secret and that the backend is running.";
+    else setDisconnected();
+  };
 }
 
 async function api(path: string, body?: unknown) {
-  const r = await fetch(BACKEND + path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", "x-demo-session": secret },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  return { ok: r.ok, status: r.status, json: await r.json().catch(() => ({})) };
+  try {
+    const r = await fetch(BACKEND + path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "content-type": "application/json", "x-demo-session": secret },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { ok: r.ok, status: r.status, json: await r.json().catch(() => ({})), unreachable: false };
+  } catch { return { ok: false, status: 0, json: {} as any, unreachable: true }; }
 }
 
 $("connect-btn").addEventListener("click", connect);
@@ -108,6 +127,7 @@ $("run-btn").addEventListener("click", async () => {
   $("progress").textContent = ""; $("result-card").hidden = true;
   setRunning(true);
   const r = await api("/api/tasks", { task: ($("task-input") as HTMLTextAreaElement).value });
+  if (r.unreachable) { setDisconnected(); return; }
   if (!r.ok) {
     setRunning(false); setState("error");
     $("result-card").hidden = false;
