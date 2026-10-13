@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Agent Live Demo</title>
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="banner">Synthetic data — not a real patient system</div>
+  <header class="wrap">
+    <p class="eyebrow">Live demo · Presient Labs</p>
+    <h1>A browser agent that cannot break its rules</h1>
+    <p class="lede">It reads a synthetic claims website and reports what it finds, with the source page and time. It cannot write, submit, sign in or leave the allowed site — and the rules are enforced below the AI model, so the model cannot talk its way past them. Pick a task and watch it work.</p>
+    <p class="links"><a href="https://github.com/Presient-Labs/browser-agent-demo">Code on GitHub</a><a href="https://github.com/Presient-Labs/browser-agent-demo/releases/download/v0.1.0/browser-agent-demo.mp4">Full demo video</a></p>
+  </header>
+
+  <main class="wrap">
+    <section id="tasks" aria-labelledby="tasks-title">
+      <h2 id="tasks-title">Pick a task</h2>
+      <div id="presets" class="presets"></div>
+      <form id="free" class="free">
+        <label for="free-text">Or type your own — one record ID (SYN-1001, 1007, 1015, 1042, 1058, 1099, 2077, 3001) and what to report (claim status, balance, payer, service date)</label>
+        <div class="free-row">
+          <input id="free-text" name="text" maxlength="300" autocomplete="off" placeholder="What is the payer of SYN-1058?">
+          <button type="submit">Run</button>
+        </div>
+        <p id="form-msg" class="msg" role="status" hidden></p>
+      </form>
+    </section>
+
+    <section id="run" aria-live="polite" hidden>
+      <p id="status" class="status"></p>
+      <div class="stage">
+        <figure class="view">
+          <img id="frame" alt="Live view of the agent's browser" width="1280" height="800">
+          <figcaption id="mode"></figcaption>
+        </figure>
+        <div class="side">
+          <h3>Steps</h3>
+          <ol id="steps" class="steps"></ol>
+        </div>
+      </div>
+      <div id="result" class="result" hidden></div>
+      <details id="audit-wrap">
+        <summary>Audit log (metadata only — no page content)</summary>
+        <div class="tablewrap">
+          <table id="audit"><thead><tr><th>Time (UTC)</th><th>Action</th><th>Outcome</th><th>Code</th></tr></thead><tbody></tbody></table>
+        </div>
+      </details>
+    </section>
+
+    <section id="recorded" hidden>
+      <h2>Recorded real run</h2>
+      <p id="recorded-why" class="msg"></p>
+      <video id="recorded-video" controls playsinline preload="none" src="/recorded/run.mp4"></video>
+    </section>
+  </main>
+
+  <footer class="wrap">
+    <p>The product is a Chrome side panel; the recorded run shows it. This page runs the same agent on a server so you can try it without installing anything.</p>
+    <p><a href="https://github.com/Presient-Labs/browser-agent-demo/blob/main/ARCHITECTURE.md">How it works, and its honest limits</a></p>
+  </footer>
+</body>
+</html>
