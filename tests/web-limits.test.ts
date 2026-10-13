@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RateLimiter, SpendLedger, clientIp } from "../web/src/limits.js";
@@ -45,6 +45,14 @@ describe("SpendLedger", () => {
     writeFileSync(f, "{not json");
     const s = new SpendLedger(f, 3, 0.15, day("2026-10-13T10:00:00Z"));
     expect(s.canStart()).toBe(false);
+  });
+
+  it("an unreadable spend file (not just a corrupt one) fails closed; only a missing file means $0", () => {
+    const d = dir();
+    const asDir = join(d, "spend.json");
+    mkdirSync(asDir); // readFileSync throws EISDIR, as it would throw EACCES without read permission
+    expect(new SpendLedger(asDir, 3, 0.15, day("2026-10-13T10:00:00Z")).canStart()).toBe(false);
+    expect(new SpendLedger(join(d, "absent.json"), 3, 0.15, day("2026-10-13T10:00:00Z")).canStart()).toBe(true);
   });
 
   it("ignores negative or non-numeric costs and writes the file atomically", () => {

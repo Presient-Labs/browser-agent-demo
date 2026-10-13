@@ -32,7 +32,10 @@ export class SpendLedger {
 
   private load(): SpendState {
     let raw: string;
-    try { raw = readFileSync(this.file, "utf8"); } catch { return { day: this.today(), usd: 0 }; } // missing: a fresh day
+    try { raw = readFileSync(this.file, "utf8"); } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return { day: this.today(), usd: 0 }; // missing: a fresh day
+      return { day: this.today(), usd: this.capUsd }; // unreadable (EACCES, EISDIR, ...): fail closed for today
+    }
     try {
       const j = JSON.parse(raw) as Partial<SpendState>;
       if (typeof j.day === "string" && typeof j.usd === "number" && Number.isFinite(j.usd) && j.usd >= 0) return { day: j.day, usd: j.usd };
