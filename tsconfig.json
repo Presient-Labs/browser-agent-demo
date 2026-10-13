@@ -5,5 +5,5 @@
     "noEmit": true, "lib": ["ES2022", "DOM"], "types": ["node", "chrome"],
     "resolveJsonModule": true
   },
-  "include": ["site/src", "backend/src", "extension/src", "tests", "scripts"]
+  "include": ["site/src", "backend/src", "extension/src", "tests", "scripts", "web/src"]
 }
