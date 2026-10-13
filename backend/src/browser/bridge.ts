@@ -210,7 +210,21 @@ export class BrowserBridge {
     });
     this.page = await this.context.newPage();
     this.cdp = await this.context.newCDPSession(this.page);
+    if (this.onFrame) await this.startScreencast(this.cdp);
     await this.page.goto("about:blank");
+  }
+
+  /** CDP screencast of the task tab, throttled to at most 5 frames per second. Stops when the task context closes. */
+  private async startScreencast(cdp: CDPSession) {
+    let last = 0;
+    cdp.on("Page.screencastFrame", (f: { data: string; sessionId: number }) => {
+      void cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
+      const now = Date.now();
+      if (now - last < 200) return;
+      last = now;
+      this.onFrame?.(f.data);
+    });
+    await cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, maxWidth: 1280, maxHeight: 800 });
   }
 
   get hasTab() { return !!this.context && !!this.page; }
@@ -218,6 +232,8 @@ export class BrowserBridge {
   /** Captures and clears THIS task's handles synchronously, then closes them: a slow close can never clear a newer task's state. */
   /** DEMO-ONLY (set by scripts/demo-run.ts, never by the API/model/tests): keep the last task tab on screen until the next task starts. */
   keepTabOpenForDemo = false;
+  /** Hosted live demo only: receives base64 JPEG frames of the task tab. Unset (default) => no screencast is started. */
+  onFrame?: (jpegBase64: string) => void;
   private pendingCloses = new Set<Promise<void>>();
   /** Resolves when every close started so far (including abort-triggered ones) has finished. */
   async settleCloses() { while (this.pendingCloses.size) await Promise.allSettled([...this.pendingCloses]); }
