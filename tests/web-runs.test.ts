@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { startStack, type Stack } from "./helpers.js";
 import { RunManager, type RunEvent, type RunManagerDeps } from "../web/src/runs.js";
 import { RateLimiter, SpendLedger } from "../web/src/limits.js";
@@ -127,5 +127,32 @@ describe("RunManager", () => {
     const r = ok(m.submit("7.7.7.7", { preset: "lookup" }));
     await collect(m, r.runId);
     expect(spend.spentToday()).toBeGreaterThan(0);
+  });
+
+  // TaskRunner catches a failed openTaskTab and RETURNS error/INTERNAL_ERROR; it does not throw into RunManager.
+  it.each([false, true])("plays the recorded run when the task tab cannot be opened (bridge also reports disconnected: %s)", async (alsoDisconnected) => {
+    let dead = false;
+    const bridge = {
+      get connected() { return !dead; }, // passes the pre-run check, as when Chromium dies just afterwards
+      openTaskTab: async () => { dead = alsoDisconnected; throw new Error("browser has been closed"); },
+      closeTaskTab: async () => {}, settleCloses: async () => {},
+    } as unknown as BrowserBridge;
+    const m = manager({ bridge });
+    const r = ok(m.submit(`8.8.8.${alsoDisconnected ? 1 : 2}`, { preset: "lookup" }));
+    const ev = await collect(m, r.runId);
+    const res = ev.find((e) => e.type === "result");
+    expect(res && res.type === "result" && res.result.code).toBe("INTERNAL_ERROR");
+    expect(ev.slice(-2)).toEqual([{ type: "fallback", reason: "browser_down" }, { type: "end" }]);
+  });
+
+  it("still delivers a finished run's result when the spend file cannot be written", async () => {
+    const unwritable = new SpendLedger(join(dirname(spendFile()), "no-such-dir", "spend.json")); // missing = $0, but add() cannot write its tmp file
+    const m = manager({ spend: unwritable });
+    const r = ok(m.submit("8.8.8.3", { preset: "lookup" }));
+    const ev = await collect(m, r.runId);
+    const res = ev.find((e) => e.type === "result");
+    expect(res && res.type === "result" && res.result.status).toBe("success");
+    expect(ev.some((e) => e.type === "fallback")).toBe(false);
+    expect(unwritable.spentToday()).toBeGreaterThan(0); // the in-memory total still counts the run
   });
 });

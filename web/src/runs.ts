@@ -148,9 +148,14 @@ export class RunManager {
         if (e.task_id === taskId) this.emit(run, { type: "progress", text: e.text });
       });
       const result = await runner.run(run.text, taskId);
-      this.d.spend.add(result.usage.estimated_cost_usd);
       this.emit(run, { type: "result", result, mutations: this.d.mutations() });
+      // TaskRunner turns a browser that cannot start into an INTERNAL_ERROR result instead of throwing.
       if (result.code.startsWith("PROVIDER_")) this.emit(run, { type: "fallback", reason: "model_error" });
+      else if (result.code === "INTERNAL_ERROR" || !this.d.bridge.connected) this.emit(run, { type: "fallback", reason: "browser_down" });
+      // A spend-file write failure must not turn a finished run into a failed one (add() updates the in-memory total first).
+      try { this.d.spend.add(result.usage.estimated_cost_usd); } catch {
+        log("web_run", { run: run.id.slice(0, 8), preset: run.preset?.id ?? "free", status: "error", code: "SPEND_WRITE_FAILED" });
+      }
       log("web_run", { run: run.id.slice(0, 8), preset: run.preset?.id ?? "free", status: result.status, code: result.code, usd: result.usage.estimated_cost_usd, ms: Date.now() - t0 });
     } catch {
       this.emit(run, { type: "fallback", reason: "browser_down" });
