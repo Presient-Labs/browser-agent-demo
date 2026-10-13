@@ -76,6 +76,14 @@ function showResult(r, mutations) {
 function listen(runId) {
   stream?.close();
   stream = new EventSource(`/api/runs/${runId}/events`);
+  // After a dropped connection EventSource reconnects and the server replays the run from the start, so each (re)connect
+  // starts from a clean display instead of appending the replay to what is already shown.
+  stream.onopen = () => {
+    $("steps").replaceChildren();
+    $("audit").tBodies[0].replaceChildren();
+    $("result").hidden = true;
+    $("result").replaceChildren();
+  };
   stream.onmessage = (m) => {
     const e = JSON.parse(m.data);
     if (e.type === "queued") $("status").textContent = e.position === 1 ? "You're next — one run at a time." : `You're number ${e.position} in line — one run at a time.`;

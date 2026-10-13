@@ -57,6 +57,35 @@ describe("live demo page (FAKE model)", () => {
     await page.close();
   });
 
+  it("a dropped event stream reconnects without showing any step or audit row twice", async () => {
+    // Final whole-branch review: a mid-run network blip makes EventSource reconnect, the server replays the run, and the
+    // page used to add every step and audit row again.
+    const page = await viewer.newPage();
+    let audits = 0;
+    let first = true;
+    await page.route("**/api/runs/*/events", async (route) => {
+      if (!first) return route.continue();
+      first = false;
+      const body = await (await route.fetch()).text(); // the whole run, which ends with "end"
+      const kept = body.split("\n\n").filter((b) => b.startsWith("data: ") && !b.includes('"type":"end"'));
+      audits = kept.filter((b) => b.includes('"type":"audit"')).length;
+      // Close the stream WITHOUT "end": the browser's EventSource treats that as a drop and reconnects.
+      await route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: `${kept.join("\n\n")}\n\n` });
+    });
+    await page.goto(`http://127.0.0.1:${app.port}/`);
+    await page.getByRole("button", { name: /Look up a claim/ }).click();
+    await page.waitForFunction(() => {
+      const b = document.querySelector("#presets button");
+      return !!b && !b.hasAttribute("disabled") && !document.querySelector("#result")?.hasAttribute("hidden");
+    }, null, { timeout: 60_000 });
+    expect(first).toBe(false);
+    expect(audits).toBeGreaterThan(0);
+    expect(await page.locator("#audit tbody tr").count()).toBe(audits);
+    const steps = await page.locator("#steps li").allTextContents();
+    expect(new Set(steps).size).toBe(steps.length);
+    await page.close();
+  });
+
   it("restarts the browser once if it dies; after a second death it reports down and plays the recorded run", async () => {
     const first = app.browser();
     first!.proc.kill("SIGKILL");
