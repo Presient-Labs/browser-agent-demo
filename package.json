@@ -21,6 +21,7 @@
     "test:real": "npm run test:real -w tests",
     "start:site": "tsx site/src/main.ts",
     "start:backend": "tsx backend/src/main.ts",
+    "start:web": "tsx web/src/main.ts",
     "browser": "bash scripts/launch-browser.sh",
     "demo": "bash scripts/demo-run.sh"
   },
