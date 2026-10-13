@@ -40,7 +40,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: "sources", label: "Summarise a record with its sources",
-    shows: "Two source systems disagree about this record. The agent reports the conflict and never picks a side.",
+    shows: "Two source systems disagree about this record. The agent reports no value rather than pick a side.",
     task: "Report the claim status, balance and payer of SYN-2077 with their sources.",
     fakeScript: "happy", simulate: null, expect: "uncertain",
   },

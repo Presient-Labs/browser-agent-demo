@@ -1,0 +1,19 @@
+name: agent-demo
+services:
+  agent-demo:
+    build: { context: ../.., dockerfile: web/deploy/Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    volumes: [agent-demo-data:/data]
+    networks: [edge]
+    shm_size: 512mb            # Chromium needs more than Docker's 64 MB default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=edge-node_internal
+      - traefik.http.routers.agent-demo.rule=Host(`agent.shawndemos.com`)
+      - traefik.http.routers.agent-demo.entrypoints=websecure
+      - traefik.http.routers.agent-demo.tls.certresolver=letsencrypt
+      - traefik.http.services.agent-demo.loadbalancer.server.port=4300
+networks:
+  edge: { external: true, name: edge-node_internal }
+volumes: { agent-demo-data: {} }

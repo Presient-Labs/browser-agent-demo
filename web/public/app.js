@@ -49,7 +49,7 @@ const STATUS_TEXT = {
   success: "Done — the answer below came from the page.",
   blocked: "Blocked — the policy stopped a forbidden action. Nothing on the site changed.",
   human_action_required: "Paused — a sign-in page needs a person. The agent read nothing from it.",
-  uncertain: "Uncertain — the sources disagree, so the agent reports no value rather than guess.",
+  uncertain: "Uncertain — the agent could not confirm a single value from the page, so it reports none rather than guess.",
   not_found: "Not found — no record with that ID exists.",
   error: "Stopped — the task ended early.",
   stopped: "Stopped.",

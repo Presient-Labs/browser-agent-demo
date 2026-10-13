@@ -4,6 +4,8 @@ Independent portfolio demo of a **constrained, read-only browser agent** over a 
 
 **Demo video (2 min 30 s, real model `claude-sonnet-5-5`):** [download / watch](https://github.com/Presient-Labs/browser-agent-demo/releases/download/v0.1.0/browser-agent-demo.mp4). It shows a structured result with source URL and UTC time, a blocked write (site mutation counter stays 0), a blocked off-allowlist navigation, a sign-in pause, and the metadata-only audit log. In beats 2 and 3 the real model refused the forbidden action, so one scripted tool call is substituted to show the policy blocking it; those beats are labelled on screen.
 
+**Try it live:** [agent.shawndemos.com](https://agent.shawndemos.com) runs this agent on a server against the same synthetic site, with a live view of its browser. Five preset tasks show a lookup, a blocked write, a blocked off-site navigation, a sign-in pause and conflicting sources; you can also type your own. Limits: one run at a time, 5 runs per visitor per hour, $3 of model spend per day, then a recorded real run plays instead. The two "blocked" presets simulate one misbehaving model step (the real model refuses), and the page labels it. Deployment: `web/deploy/` (Docker + Traefik).
+
 **At a glance:** 185 automated tests (redirect chains, isolated-world extraction, WebSocket/WebRTC egress, prompt-injection, leak markers, Stop/deadline races). Two rounds of independent adversarial code review plus a final verification pass, each finding fixed with a red→green regression test (see `ACCEPTANCE_REPORT.md`). Real-provider run: success, ~$0.02 per task (estimate).
 
 ## Tested setup (what was actually run)
