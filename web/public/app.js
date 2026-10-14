@@ -55,6 +55,16 @@ const STATUS_TEXT = {
   stopped: "Stopped.",
 };
 
+// The synthetic site runs on a loopback address inside the demo, which a visitor cannot open, so show its path instead.
+function sourceLabel(url) {
+  if (!url) return "—";
+  try {
+    const u = new URL(url);
+    if (u.hostname === "127.0.0.1" || u.hostname === "localhost") return `${u.pathname}${u.search} · synthetic site inside the demo`;
+  } catch { /* not a URL: show it as it is */ }
+  return url;
+}
+
 function showResult(r, mutations) {
   const box = $("result");
   box.replaceChildren();
@@ -64,7 +74,7 @@ function showResult(r, mutations) {
   const row = (k, v) => { dl.append(el("dt", "", k), el("dd", "", v)); };
   row("Record", r.record_id ?? "—");
   for (const [k, v] of Object.entries(r.fields ?? {})) row(k.replace(/_/g, " "), v);
-  row("Source page", r.source_url ?? "—");
+  row("Source page", sourceLabel(r.source_url));
   row("Read at (UTC)", r.retrieved_at ?? "—");
   row("Reason code", r.code);
   row("Site change counter", String(mutations));

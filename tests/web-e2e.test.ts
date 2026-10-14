@@ -35,6 +35,17 @@ describe("live demo page (FAKE model)", () => {
     await page.close();
   });
 
+  it("the source page shows its path on the synthetic site, not a loopback address a visitor cannot open", async () => {
+    const page = await viewer.newPage();
+    await page.goto(`http://127.0.0.1:${app.port}/`);
+    await page.getByRole("button", { name: /Look up a claim/ }).click();
+    await page.locator("#result").waitFor({ state: "visible", timeout: 60_000 });
+    const rows = await page.locator("#result dl").evaluate((dl) => Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling?.textContent])));
+    expect(rows["Source page"]).toMatch(/^\/\S+ · synthetic site inside the demo$/);
+    expect(rows["Source page"]).not.toContain("127.0.0.1");
+    await page.close();
+  });
+
   it("the blocked-write preset shows the block, and the site change counter stays at 0", async () => {
     const page = await viewer.newPage();
     await page.goto(`http://127.0.0.1:${app.port}/`);
