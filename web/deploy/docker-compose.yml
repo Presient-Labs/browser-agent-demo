@@ -14,6 +14,19 @@ services:
       - traefik.http.routers.agent-demo.entrypoints=websecure
       - traefik.http.routers.agent-demo.tls.certresolver=letsencrypt
       - traefik.http.services.agent-demo.loadbalancer.server.port=4300
+      # shawndemos.com/browser-agent/: a second router next to the one above. /browser-agent redirects to /browser-agent/,
+      # then the prefix is stripped; the page uses relative URLs. No compression middleware: it can hold back the event stream.
+      - traefik.http.routers.agent-path.rule=Host(`shawndemos.com`) && PathPrefix(`/browser-agent`)
+      - traefik.http.routers.agent-path.entrypoints=websecure
+      - traefik.http.routers.agent-path.tls.certresolver=letsencrypt
+      - traefik.http.routers.agent-path.middlewares=agent-slash,agent-strip
+      - traefik.http.routers.agent-path.service=agent-demo
+      # Explicit priority: Traefik's default is the rule's length, and CareOps's longer Host(shawndemos.com) rule would win.
+      - traefik.http.routers.agent-path.priority=1000
+      - traefik.http.middlewares.agent-slash.redirectregex.regex=^https://shawndemos\.com/browser-agent$$
+      - traefik.http.middlewares.agent-slash.redirectregex.replacement=https://shawndemos.com/browser-agent/
+      - traefik.http.middlewares.agent-slash.redirectregex.permanent=true
+      - traefik.http.middlewares.agent-strip.stripprefix.prefixes=/browser-agent
 networks:
   edge: { external: true, name: edge-node_internal }
 volumes: { agent-demo-data: {} }
