@@ -41,6 +41,14 @@ describe("web server", () => {
     expect(await r.text()).toContain("Synthetic data — not a real patient system");
   });
 
+  it("states bounded read-only claims instead of absolute guarantees", async () => {
+    const html = await (await fetch(`${base}/`)).text();
+    expect(html).toContain("<h1>A browser agent with enforced read-only boundaries.</h1>");
+    expect(html).toContain("Its covered browser tools block writing, submitting, signing in and leaving the allowed site.");
+    expect(html).not.toContain("cannot break its rules");
+    expect(html).not.toMatch(/\bcannot (write|talk)/);
+  });
+
   it("answers unknown paths with a generic 404 and never serves files outside the list", async () => {
     for (const p of ["/nope", "/package.json", "/web/src/server.ts", "/recorded/", "/index.html"]) {
       const r = await fetch(`${base}${p}`);
