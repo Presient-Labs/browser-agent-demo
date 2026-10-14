@@ -75,7 +75,7 @@ function showResult(r, mutations) {
 
 function listen(runId) {
   stream?.close();
-  stream = new EventSource(`/api/runs/${runId}/events`);
+  stream = new EventSource(`api/runs/${runId}/events`);
   // After a dropped connection EventSource reconnects and the server replays the run from the start, so each (re)connect
   // starts from a clean display instead of appending the replay to what is already shown.
   stream.onopen = () => {
@@ -104,7 +104,7 @@ async function start(body) {
   showMsg("");
   setBusy(true);
   try {
-    const r = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await fetch("api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
     if (r.status !== 202) { showMsg(j.message ?? "Something went wrong. Try again in a minute."); setBusy(false); return; }
     resetRun();
@@ -118,7 +118,7 @@ async function start(body) {
 }
 
 async function init() {
-  const list = await (await fetch("/api/presets")).json();
+  const list = await (await fetch("api/presets")).json();
   for (const p of list) {
     const b = el("button", "preset");
     b.type = "button";
